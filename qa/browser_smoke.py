@@ -124,7 +124,9 @@ def run_test():
                     page.locator("#alerts button.incident-report").first.click()
                 one = single_file.value
                 assert one.suggested_filename.startswith("aervigia-INC-")
-                assert '"simulation": true' in Path(one.path()).read_text(encoding="utf-8")
+                one_report = json.loads(Path(one.path()).read_text(encoding="utf-8"))
+                assert one_report["simulation"] is True
+                assert one_report["incident"]["reference"].startswith("INC-")
 
                 for width, height in [(1440, 900), (768, 1024), (390, 844), (320, 750)]:
                     page.set_viewport_size({"width": width, "height": height})
