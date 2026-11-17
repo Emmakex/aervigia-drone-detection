@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#091321">
+  <title>AERVIGIA · Airspace Intelligence Demo</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e9f2fc;background:#091321;font-synthesis:none}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 60% -30%,#174266 0,transparent 45%),#091321;min-height:100vh}
+    button,input{font:inherit}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 30px;border-bottom:1px solid #28405a;background:#091524d9}
+    .brand{font-size:23px;letter-spacing:.24em;font-weight:850}
+    .tagline{display:block;font-size:11px;letter-spacing:.15em;font-weight:500;color:#90a9c5;margin-top:4px}
+    .flag{border:1px solid #2c6e92;border-radius:999px;color:#aee8ff;background:#123048;padding:7px 12px;font-size:11px;letter-spacing:.08em;font-weight:800}
+    .container{max-width:1540px;margin:auto;padding:26px 28px}
+    .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+    h1{font-size:clamp(22px,3vw,32px);font-weight:740;margin:0}
+    p{line-height:1.55}
+    .sub{margin:8px 0 0;color:#a0b7cb;font-size:14px}
+    .status{font-size:12px;color:#b8d4e8;display:flex;gap:8px;align-items:center}
+    .pulse{width:9px;height:9px;border-radius:50%;background:#4cdeb0;box-shadow:0 0 0 4px #4cdeb022}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:15px}
+    .stat,.panel{background:#101f30;border:1px solid #28405a;border-radius:14px;box-shadow:0 15px 45px #03090f30}
+    .stat{padding:17px 20px}
+    .stat .num{font-size:26px;font-weight:750;letter-spacing:-.04em;display:block;margin-bottom:2px}
+    .stat .label{color:#9db3c9;font-size:12px}
+    .layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,.9fr);gap:15px}
+    .panel{overflow:hidden}
+    .heading{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #253e55;gap:10px}
+    h2{font-size:14px;letter-spacing:.02em;margin:0;font-weight:720}
+    .muted{color:#9ab1c7;font-size:12px}
+    .mapwrap{background:#091c2e;padding:12px 15px 4px;position:relative}
+    #map{display:block;width:100%;height:auto;aspect-ratio:16/10;background:linear-gradient(130deg,#0b2238,#0a1a2d);border:1px solid #24405c;border-radius:10px}
+    .watermark{position:absolute;bottom:20px;left:29px;font-size:12px;letter-spacing:.14em;color:#7bb5ceaa;pointer-events:none}
+    .legend{display:flex;gap:17px;flex-wrap:wrap;padding:14px 18px;color:#b2c4d3;font-size:12px;border-top:1px solid #253e55}
+    .dot{width:10px;height:10px;display:inline-block;margin-right:6px;border-radius:50%;background:#4be8d0}
+    .dot.zone{background:#f1bf71;border-radius:2px}
+    .dot.trail{background:#65aeea}
+    .right{display:flex;flex-direction:column;gap:15px}
+    .alerts{max-height:390px;overflow:auto;padding:8px 16px 15px}
+    .alert{padding:12px 4px;border-bottom:1px solid #233950}
+    .alert:last-child{border-bottom:0}
+    .alert-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .alert-title{font-size:13px;font-weight:700}
+    .alert-meta{font-size:12px;color:#a4b9cb;line-height:1.6;margin-top:5px}
+    .chip{border:1px solid #b18f4f;background:#4a381e;color:#f4ce8b;border-radius:6px;padding:3px 6px;font-size:10px;font-weight:800}
+    .chip.ok{border-color:#417f72;background:#16362f;color:#88e6c8}
+    .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:7px 10px;cursor:pointer;font-size:11px}
+    .ack:hover{background:#225375}
+    .tablewrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
+    th{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#8fa9c3;background:#10273b}
+    td,th{padding:12px 15px;border-bottom:1px solid #223a51}
+    td{white-space:nowrap}
+    tbody tr:last-child td{border:0}
+    .strong{font-weight:750;color:#e7f6ff}
+    .settings{padding:15px 16px}
+    .settings label{display:block;font-size:12px;color:#a9c0d4;margin-bottom:7px}
+    .settings input{width:100%;padding:11px;border-radius:7px;border:1px solid #34516a;background:#0b1b2b;color:#fff}
+    .settings small{display:block;color:#8fa9bf;margin-top:8px;line-height:1.5}
+    .hint{margin:0;padding:18px;color:#a6bed0;font-size:13px}
+    footer{margin:25px 0 6px;font-size:12px;color:#819eb7;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+    a{color:#9edcf8}
+    :focus-visible{outline:3px solid #56c9ed;outline-offset:3px}
+    @media(max-width:1000px){.layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:1fr 1fr}.right .panel:first-child{grid-row:span 2}}
+    @media(max-width:670px){.header{padding:17px}.container{padding:16px}.brand{font-size:18px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.right{grid-template-columns:1fr}.stat{padding:15px}.mapwrap{padding:8px}.watermark{bottom:14px;left:20px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="brand">AERVIGIA <span class="tagline">DRONE DETECTION & AIRSPACE INTELLIGENCE</span></div>
+    <span class="flag">● SIMULATION ONLY</span>
+  </header>
+  <main class="container">
+    <div class="topline">
+      <div><h1>Centro de monitorización aérea</h1><p class="sub">Demo con dos aeronaves ficticias, observaciones generadas y revisión humana de alertas.</p></div>
+      <div class="status" role="status"><span class="pulse"></span><span id="connection">Conectando al simulador…</span></div>
+    </div>
+    <section class="stats" aria-label="Indicadores">
+      <div class="stat"><span class="num" id="trackcount">—</span><span class="label">Trayectorias simuladas</span></div>
+      <div class="stat"><span class="num" id="alertcount">—</span><span class="label">Alertas pendientes</span></div>
+      <div class="stat"><span class="num" id="sourcecount">—</span><span class="label">Fuentes simuladas</span></div>
+      <div class="stat"><span class="num" id="stepcount">—</span><span class="label">Pasos de simulación</span></div>
+    </section>
+    <div class="layout">
+      <div>
+        <section class="panel" aria-labelledby="map-title">
+          <div class="heading"><h2 id="map-title">Plano de situación sintético</h2><span class="muted">Marco ficticio · No es cartografía real</span></div>
+          <div class="mapwrap">
+            <svg id="map" role="img" aria-label="Plano de simulación con zona protegida y trayectorias" viewBox="0 0 900 560"></svg>
+            <div class="watermark" aria-hidden="true">AERVIGIA / DEMO</div>
+          </div>
+          <div class="legend">
+            <span><i class="dot"></i> Posición simulada</span>
+            <span><i class="dot trail"></i> Historial</span>
+            <span><i class="dot zone"></i> Zona de prueba</span>
+          </div>
+        </section>
+        <section class="panel" style="margin-top:15px" aria-labelledby="track-title">
+          <div class="heading"><h2 id="track-title">Trayectorias activas</h2><span class="muted">Identificación provisional por fuente</span></div>
+          <div class="tablewrap"><table>
+            <thead><tr><th>ID</th><th>Clasificación</th><th>Fuente</th><th>Incertidumbre</th><th>Última observación</th></tr></thead>
+            <tbody id="trackrows"><tr><td colspan="5">Inicializando…</td></tr></tbody>
+          </table></div>
+        </section>
+      </div>
+      <aside class="right" aria-label="Alertas y configuración">
+        <section class="panel" aria-labelledby="alert-title">
+          <div class="heading"><h2 id="alert-title">Revisión de incidentes</h2><span class="muted" id="alerts-label">0 eventos</span></div>
+          <div id="alerts" class="alerts" aria-live="polite"><p class="hint">Esperando datos simulados…</p></div>
+        </section>
+        <section class="panel" aria-labelledby="settings-title">
+          <div class="heading"><h2 id="settings-title">Control de acceso para acciones</h2></div>
+          <div class="settings"><label for="apikey">Clave local de escritura (opcional)</label>
+            <input id="apikey" type="password" autocomplete="off" placeholder="AERVIGIA_API_TOKEN">
+            <small>Solo se mantiene en memoria de esta pestaña. Se usa para reconocer alertas; sin clave la demo es de solo lectura.</small>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="activity-title">
+          <div class="heading"><h2 id="activity-title">Actividad reciente</h2></div>
+          <div id="events" aria-live="off"><p class="hint">Aún no hay actividad.</p></div>
+        </section>
+      </aside>
+    </div>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.1 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+  </main>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  const bounds = {x0: 40, x1: 860, y0: 30, y1: 530};
+  const coordinate = (lat, lon) => ({
+    x: bounds.x0 + (lon + 0.05) / 0.1 * (bounds.x1 - bounds.x0),
+    y: bounds.y1 - (lat + 0.05) / 0.1 * (bounds.y1 - bounds.y0)
+  });
+  function svg(tag, attrs = {}, text = null) {
+    const el = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([key,value]) => el.setAttribute(key, String(value)));
+    if(text !== null) el.textContent = text;
+    return el;
+  }
+  function node(tag, text, className) {
+    const el = document.createElement(tag);
+    if(text !== undefined) el.textContent = text;
+    if(className) el.className = className;
+    return el;
+  }
+  const fmtTime = value => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString("es-ES");
+  };
+  function draw(state) {
+    const surface = $("map");
+    surface.replaceChildren();
+    for(let i = 0; i <= 10; i++) {
+      const x = bounds.x0 + i * (bounds.x1 - bounds.x0) / 10;
+      const y = bounds.y0 + i * (bounds.y1 - bounds.y0) / 10;
+      surface.append(svg("line", {x1:x,y1:bounds.y0,x2:x,y2:bounds.y1,stroke:"#203c55","stroke-width":1}));
+      surface.append(svg("line", {x1:bounds.x0,y1:y,x2:bounds.x1,y2:y,stroke:"#203c55","stroke-width":1}));
+    }
+    for (const zone of state.zones) {
+      const nw = coordinate(zone.max_lat, zone.min_lon);
+      const se = coordinate(zone.min_lat, zone.max_lon);
+      surface.append(svg("rect", {x:nw.x,y:nw.y,width:se.x-nw.x,height:se.y-nw.y,fill:"#dca75a","fill-opacity":0.13,stroke:"#f1bf71","stroke-width":2,"stroke-dasharray":"8 5"}));
+      surface.append(svg("text", {x:nw.x+8,y:nw.y+20,fill:"#f4c989","font-size":12,"font-weight":"bold"}, "ZONA DE PRUEBA"));
+    }
+    state.tracks.forEach((track, i) => {
+      const color = ["#4de5c5","#65abf0","#e1b66f","#e698ad"][i % 4];
+      const coords = track.history.map(p => coordinate(p.latitude,p.longitude));
+      if(coords.length > 1) {
+        surface.append(svg("polyline", {
+          points:coords.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "),
+          fill:"none",stroke:color,"stroke-width":2,"stroke-opacity":0.7,"stroke-linejoin":"round"
+        }));
+      }
+      const p = coordinate(track.position.latitude, track.position.longitude);
+      const ring = svg("circle",{cx:p.x,cy:p.y,r:14,fill:"none",stroke:color,"stroke-opacity":0.37,"stroke-width":2});
+      surface.append(ring);
+      surface.append(svg("circle",{cx:p.x,cy:p.y,r:6,fill:color,stroke:"#092138","stroke-width":2}));
+      surface.append(svg("text",{x:p.x+17,y:p.y-10,fill:"#eaf5ff","font-size":13,"font-weight":"bold"},track.id));
+    });
+    surface.append(svg("text",{x:50,y:552,fill:"#83a0b8","font-size":10},"SIMULATED LOCAL FRAME · NOT GPS NAVIGATION"));
+  }
+  function renderTracks(tracks) {
+    const tbody = $("trackrows");
+    tbody.replaceChildren();
+    if(!tracks.length) {
+      const tr = node("tr"), td = node("td","Sin trayectorias activas");
+      td.colSpan = 5; tr.append(td);tbody.append(tr);return;
+    }
+    for(const track of tracks) {
+      const tr = node("tr");
+      [track.id, track.classification, track.source_id, track.uncertainty_m+" m",fmtTime(track.last_seen)]
+        .forEach((value,i) => {const td = node("td", value, i === 0 ? "strong" : "");tr.append(td);});
+      tbody.append(tr);
+    }
+  }
+  async function ack(id) {
+    const token = $("apikey").value.trim();
+    if(!token) {window.alert("Introduce primero la clave de escritura del servidor.");return;}
+    try {
+      const response = await fetch("/api/alerts/"+encodeURIComponent(id)+"/ack",{
+        method:"POST",headers:{"X-API-Key":token}
+      });
+      if(!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "No se pudo reconocer la alerta");
+      }
+      await refresh();
+    } catch(err) {window.alert(String(err.message || err));}
+  }
+  function renderAlerts(alerts) {
+    const region = $("alerts");
+    region.replaceChildren();
+    $("alerts-label").textContent = alerts.length+" eventos";
+    if(!alerts.length) {region.append(node("p","No hay entradas en la zona de prueba.","hint"));return;}
+    alerts.forEach(alert => {
+      const section = node("div",undefined,"alert");
+      const head = node("div",undefined,"alert-head");
+      head.append(node("strong",alert.title,"alert-title"));
+      head.append(node("span",alert.acknowledged?"REVISADA":"PENDIENTE",alert.acknowledged?"chip ok":"chip"));
+      section.append(head);
+      section.append(node("div",alert.track_id+" · "+fmtTime(alert.at),"alert-meta"));
+      if(!alert.acknowledged) {
+        const btn = node("button","Marcar como revisada","ack");
+        btn.type="button";
+        btn.addEventListener("click",()=>ack(alert.id));
+        section.append(btn);
+      }
+      region.append(section);
+    });
+  }
+  function renderEvents(events) {
+    const el = $("events");
+    el.replaceChildren();
+    if(!events.length) {el.append(node("p","Sin actividad.","hint"));return;}
+    const list = node("ul");
+    list.style.cssText="padding:0 17px 6px 30px;font-size:12px;color:#a9bdd1;line-height:1.9";
+    events.slice(0,6).forEach(e => {
+      const li = node("li",fmtTime(e.at)+" · "+e.track_id+" · "+(e.type==="zone-entry"?"Entrada de zona":"Nueva trayectoria"));
+      list.append(li);
+    });
+    el.append(list);
+  }
+  let loading = false;
+  async function refresh() {
+    if(loading) return;
+    loading = true;
+    try {
+      const response = await fetch("/api/state",{cache:"no-store"});
+      if(!response.ok) throw new Error("HTTP "+response.status);
+      const state = await response.json();
+      $("trackcount").textContent = state.tracks.length;
+      $("alertcount").textContent = state.alerts.filter(a=>!a.acknowledged).length;
+      $("sourcecount").textContent = new Set(state.tracks.map(t=>t.source_id)).size;
+      $("stepcount").textContent = state.step;
+      $("connection").textContent = "Simulación conectada · actualización 1,5 s";
+      draw(state);renderTracks(state.tracks);renderAlerts(state.alerts);renderEvents(state.events);
+    } catch(error) {$("connection").textContent = "Error de conexión: "+String(error.message || error);}
+    finally {loading = false;}
+  }
+  refresh();
+  window.setInterval(refresh,1500);
+})();
+</script>
+</body>
+</html>
