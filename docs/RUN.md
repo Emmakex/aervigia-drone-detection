@@ -1,63 +1,73 @@
-# Ejecutar AERVIGIA v0.1 — laboratorio local
+# Ejecutar AERVIGIA v0.2 — laboratorio local
 
-**Estado:** prototipo de observaciones simuladas. No procesa señales de sensores reales.
+**Alcance:** simulación, almacenamiento local opcional y revisión humana. No se conecta a ningún sensor real. **No desplegar públicamente**.
 
-## Python (desarrollo)
-
-Requisitos: Python 3.12+.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-python -m pytest -q
-uvicorn aervigia.app:app --host 127.0.0.1 --port 8000
-```
-
-Visita http://127.0.0.1:8000 para ver el panel; http://127.0.0.1:8000/docs para la API.
-
-El simulador empieza automáticamente con dos fuentes ficticias (alpha y bravo) y genera observaciones cada 1,5 segundos. La zona y el mapa son completamente sintéticos.
-
-## Docker
+## Opción recomendada: Docker Compose
 
 ```bash
 docker compose up --build
 ```
 
-El puerto de Docker se publica exclusivamente en 127.0.0.1 de la máquina anfitriona.
+Abre http://127.0.0.1:8000.
 
-## Activar escritura (solo entorno local)
+- Simulador en marcha: dos fuentes y coordenadas ficticias cada 1,5 s.
+- Persistencia SQLite habilitada en el volumen Docker nombrado `aervigia-data`.
+- Retención: 7 días por defecto, aplicada al **arranque** (aún no se aplica continuamente en segundo plano).
+- Puerto publicado solo en `127.0.0.1` del anfitrión.
+- Acceso de lectura local abierto si no estableces `AERVIGIA_VIEW_TOKEN`.
+- Los cambios están deshabilitados a menos que definas `AERVIGIA_API_TOKEN`.
 
-Por defecto las rutas POST están **deshabilitadas**. Para permitir inyección de observaciones sintéticas, reconocimiento de alertas o reinicio:
+Para probar los roles de consulta y operador (valores de ejemplo; genera los tuyos):
 
 ```bash
-export AERVIGIA_API_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
+export AERVIGIA_VIEW_TOKEN="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
+export AERVIGIA_API_TOKEN="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
+export AERVIGIA_OPERATOR_ID="operador-demo"
+docker compose up --build
+```
+
+En el panel, introduce la clave de consulta en el campo correspondiente.
+La clave de operador sirve para reconocer alertas. No se guarda ninguna clave en `localStorage` ni en el repositorio. No comparta claves entre operadores reales: aún no existe autenticación nominal.
+
+> Nota: los operadores comparten una única credencial en esta versión. El campo `AERVIGIA_OPERATOR_ID` etiqueta acciones con un nombre **configurado**, no demuestra la identidad personal de quien las realizó. RBAC individual y auditoría resistente a manipulaciones quedan pendientes.
+
+## Python (sin Docker)
+
+Requisitos: Python 3.12+.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+mkdir -p data
+export AERVIGIA_DB_PATH="$PWD/data/aervigia.sqlite3"
+export AERVIGIA_RETENTION_DAYS="7"
 uvicorn aervigia.app:app --host 127.0.0.1 --port 8000
 ```
 
-En el panel, introduce la misma clave en «Clave local de escritura» para reconocer incidentes. La interfaz no almacena ese secreto en disco. Para Docker, establece la variable antes de iniciar Compose.
+Sin `AERVIGIA_DB_PATH`, la aplicación sigue funcionando íntegramente en memoria, como v0.1. El directorio `data/` está excluido de Git. La variable `AERVIGIA_RETENTION_DAYS` acepta valores enteros entre 1 y 30.
 
-## API
+## API local
 
 | Método | Ruta | Acceso | Función |
 | --- | --- | --- | --- |
-| GET | /healthz | Lectura | Salud del servicio |
-| GET | /api/state | Lectura | Estado de simulación, trazas y alertas |
-| POST | /api/observations | X-API-Key | Validar e incorporar un evento sintético |
-| POST | /api/alerts/{id}/ack | X-API-Key | Reconocer una alerta |
-| POST | /api/simulation/reset | X-API-Key | Reiniciar estado en memoria |
+| GET | /healthz | Anónimo | Salud del prototipo |
+| GET | /api/state | Clave de consulta si se configura | Estado ficticio actual |
+| GET | /api/audit | Clave de consulta si se configura | Últimas revisiones/reinicios |
+| POST | /api/observations | X-API-Key | Ingresar observaciones **solo simuladas** |
+| POST | /api/alerts/{id}/ack | X-API-Key | Revisar una alerta |
+| POST | /api/simulation/reset | X-API-Key | Reiniciar estado actual y registrar el reinicio |
 
-Los POST requieren un valor de cabecera X-API-Key igual a AERVIGIA_API_TOKEN. Sin configuración, responderán 503.
+Encabezado de consulta: `X-View-Key: <clave>`. Un operador con `X-API-Key` también puede leer. Si `AERVIGIA_VIEW_TOKEN` no está configurado, la lectura funciona sin credenciales solo en el laboratorio local.
 
-## Límites del MVP
+**Persistencia tras reinicio:** se reconstruyen las trayectorias, alertas y acciones a partir del diario SQLite. El simulador reanuda una nueva secuencia ficticia con identificadores de eventos únicos, sin sensores reales.
 
-- Fuente de cada trayectoria: **un identificador de simulador**, no una fusión multisensor.
-- Almacenamiento: solo memoria; se pierde al reiniciar. No hay base de datos ni retención persistente.
-- Seguridad: API de escritura con clave; las rutas de lectura son locales, sin autenticación. **No exponer a Internet**.
-- Detección real: inexistente. No se han conectado radares, RF, Remote ID ni EO/IR.
-- Geometría: zona de demostración y coordenadas ficticias sin validez de navegación.
-- Uso: únicamente prototipado y evaluación de experiencia de operador.
+## Seguridad y límites conocidos
 
-## Próximo corte
-
-Persistencia auditable, usuarios y RBAC, geofencing configurable y conectores de fuentes autorizadas tras revisión legal y de seguridad. No se incluyen mecanismos de interferencia ni acciones autónomas.
+- SQLite es un diario de eventos local y **no** un registro inmutable ni certificado.
+- Las claves de roles son compartidas, no hay cuentas de usuarios ni sesiones individuales.
+- El borrado automático de registros antiguos ocurre al **iniciar**, no de forma continua. Cualquier política estricta de retención necesita ampliar este módulo y validar la eliminación de copias de seguridad.
+- No hay cifrado en reposo, límite de peticiones ni una configuración de seguridad para Internet. No expongas el panel/API a la red.
+- Las trayectorias corresponden a una fuente de simulación por pista, no a correlación/fusión multisensor real.
+- No hay RF, radar, Remote ID, EO/IR, neutralización, orientación de armas ni actuaciones autónomas.
