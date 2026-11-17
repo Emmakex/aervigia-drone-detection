@@ -209,7 +209,7 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
         return {
             "schema_version": "0.4",
             "simulation": True,
-            "notice": "SYNTHETIC DEMO ONLY — not evidence of real airspace events",
+            "notice": "SIMULATED DEMO ONLY — not evidence of real airspace events",
             "scope": "current-reset-only, latest 80 incidents; retention applies",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "incident": incident_report(incident),
