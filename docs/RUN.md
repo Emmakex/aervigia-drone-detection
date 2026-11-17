@@ -1,4 +1,4 @@
-# AERVIGIA v0.4.0 — Laboratorio local de observaciones simuladas
+# AERVIGIA v0.5.0 — Laboratorio local de observaciones simuladas
 
 **No apto para despliegue público ni decisiones operativas.** Las trayectorias, zonas y eventos son ficticios; ningún sensor real está conectado.
 
@@ -10,7 +10,7 @@ docker compose up --build
 
 Abre http://127.0.0.1:8000. El panel es de solo lectura hasta configurar una clave de escritura; por defecto Docker solo publica el puerto en `127.0.0.1`.
 
-La demo v0.4.0 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
+La demo v0.5.0 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
 
 ## Cuentas individuales y roles — modo recomendado
 
@@ -56,7 +56,7 @@ Si se configura `AERVIGIA_USERS_FILE` pero no existe el fichero, la API **rechaz
 
 > No es un servicio de identidad listo para producción: no existen aún sesiones limitadas temporalmente, SSO, MFA, limitación de intentos, gestión centralizada de identidades ni controles de seguridad para Internet. Cada token es permanente hasta su revocación. El registro no es inmutable ni a prueba de manipulaciones.
 
-## Gestión de incidentes (v0.4.0)
+## Gestión de incidentes (v0.5.0)
 
 El panel incorpora filtros **Abiertos, Pendientes, Revisados, Cerrados y Todos**.
 El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
@@ -68,7 +68,30 @@ El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
 - Los incidentes cerrados desaparecen del filtro «Abiertos», pero permanecen consultables en «Cerrados» mientras sigan en la ventana reciente y de retención.
 - Las bases SQLite creadas con v0.2 se migran al abrirlas para registrar los nuevos eventos de cierre.
 
-## Informes y exportación (v0.4.0)
+## Escenarios ficticios (v0.5.0)
+
+El panel incluye el laboratorio de escenarios con **tres presets**:
+
+- **Recorrido estándar** (`standard`): dos pistas sintéticas, una puede entrar en la zona.
+- **Sin entradas** (`clear`): dos pistas ficticias que siempre permanecen fuera de la zona.
+- **Entradas múltiples** (`dual-entry`): tres pistas ficticias, dos atraviesan la zona y generan alertas separadas.
+
+El catálogo se consulta desde el servidor, no se editan coordenadas reales ni se conecta hardware. Los botones para **Iniciar**, **Pausar** y **Reanudar** solo se habilitan a administradores autenticados. Los roles viewer y operator pueden ver el estado, pero no cambiarlo.
+
+**Iniciar un escenario reinicia el estado visible** (pistas, alertas e incidentes de la sesión actual). Con SQLite, la selección de escenario se registra como evento de reinicio con el identificador y usuario responsable. Los eventos anteriores siguen sujetos a la retención configurada, pero no se mezclan con el estado visible del nuevo ensayo. La pausa/reanudación funciona **solo en memoria**: se pierde al reiniciar el servicio y no constituye auditoría persistente.
+
+Rutas locales:
+
+| Método | Ruta | Acceso |
+| --- | --- | --- |
+| GET | `/api/simulation/scenarios` | Viewer, operator, admin |
+| POST | `/api/simulation/scenarios/{id}/start` | Solo admin |
+| POST | `/api/simulation/pause` | Solo admin |
+| POST | `/api/simulation/resume` | Solo admin |
+
+La simulación sigue siendo **no operativa**: planos abstractos, trayectorias deterministas y eventos imaginarios; no es un sistema certificado para seguridad aérea.
+
+## Informes y exportación (v0.5.0)
 
 El centro de mando permite descargar un informe individual **JSON** por incidente
 a usuarios autorizados y exportar un lote reciente como **JSON o CSV** únicamente
