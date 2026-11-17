@@ -3,10 +3,10 @@
 from collections import deque
 from datetime import datetime, timezone
 from hashlib import sha256
-from math import sin
 from threading import RLock
 from uuid import uuid4
 
+from aervigia.scenarios import DEFAULT_SCENARIO, SCENARIOS, scenario_paths
 from aervigia.storage import SQLiteEventJournal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -57,6 +57,8 @@ class TrackStore:
         self._lock = RLock()
         self.journal = journal
         self._run_id = uuid4().hex[:12]
+        self._scenario_id = DEFAULT_SCENARIO
+        self._paused = False
         self._step = 0
         self._tracks = {}
         self._alerts = []
@@ -81,12 +83,23 @@ class TrackStore:
                         at=payload["at"], replay=True
                     )
                 elif kind == "reset":
-                    self.reset(replay=True)
+                    self.reset(replay=True, scenario_id=payload.get("scenario_id", DEFAULT_SCENARIO))
 
-    def reset(self, replay: bool = False, actor: str = "local-operator"):
+    def reset(
+        self, replay: bool = False, actor: str = "local-operator",
+        scenario_id: str | None = None,
+    ):
+        """Clear the current demo run. Scenario choice is journaled with reset."""
         with self._lock:
+            next_id = scenario_id if scenario_id is not None else self._scenario_id
+            if next_id not in SCENARIOS:
+                raise ValueError("Unknown simulation scenario")
             if self.journal is not None and not replay:
-                self.journal.append("reset", {"actor": actor, "at": utc_now()})
+                self.journal.append(
+                    "reset", {"actor": actor, "at": utc_now(), "scenario_id": next_id}
+                )
+            self._scenario_id = next_id
+            self._paused = False
             self._run_id = uuid4().hex[:12]
             self._step = 0
             self._tracks.clear()
@@ -96,6 +109,16 @@ class TrackStore:
             self._recent_observations.clear()
             self._seen_observations.clear()
             self._alert_seq = 0
+
+    def set_paused(self, paused: bool, actor: str = "local-operator") -> bool:
+        """Pause/resume locally without changing persistent incident evidence."""
+        with self._lock:
+            self._paused = bool(paused)
+            self._events.appendleft({
+                "type": "simulation-paused" if self._paused else "simulation-resumed",
+                "track_id": "simulator", "actor": actor, "at": utc_now(),
+            })
+            return self._paused
 
     def ingest(self, observation: Observation, replay: bool = False):
         # Tracks are keyed by source. This is a demonstration, not sensor fusion.
@@ -235,7 +258,7 @@ class TrackStore:
             removed = self.journal.purge_expired()
             if not removed:
                 return 0
-            saved_run, saved_step = self._run_id, self._step
+            saved_run, saved_step, saved_paused = self._run_id, self._step, self._paused
             self.reset(replay=True)
             for kind, payload in self.journal.iter_events():
                 if kind == "observation":
@@ -251,9 +274,9 @@ class TrackStore:
                         at=payload["at"], replay=True
                     )
                 elif kind == "reset":
-                    self.reset(replay=True)
+                    self.reset(replay=True, scenario_id=payload.get("scenario_id", DEFAULT_SCENARIO))
             # Keep the running simulator's series continuous after maintenance.
-            self._run_id, self._step = saved_run, saved_step
+            self._run_id, self._step, self._paused = saved_run, saved_step, saved_paused
             return removed
 
     def audit_actions(self, limit: int = 50) -> list[dict]:
@@ -262,29 +285,28 @@ class TrackStore:
         return self.journal.audit_actions(limit)
 
     def advance(self):
-        """One reproducible step for TWO fictional aircraft tracks."""
+        """Produce one coherent, deterministic tick in the active fake scenario."""
         with self._lock:
+            if self._paused:
+                return False
             n = self._step
-            self._step += 1
             run_id = self._run_id
-        # Reset simulated routes every 28 steps; no real-world coordinates.
-        phase = n % 28
-        paths = [
-            ("alpha", 8 + phase * 3.2, 52 + sin(phase / 3) * 4, "quadcopter"),
-            ("bravo", 87 - phase * 1.6, 19 + sin(phase / 4) * 5, "unknown"),
-        ]
-        for source, x, y, classification in paths:
-            self.ingest(Observation(
-                schema_version="0.1",
-                observation_id=f"sim-{run_id}-{n}-{source}",
-                source_id=source,
-                source_type="simulator",
-                observed_at=datetime.now(timezone.utc),
-                position=Position(latitude=(y - 50) / 1000, longitude=(x - 50) / 1000),
-                position_uncertainty_m=12.0,
-                classification=classification,
-                simulation=True,
-            ))
+            # Hold the same lock across both track updates so a scenario
+            # reset cannot mix observations from the previous run.
+            for source, x, y, classification in scenario_paths(self._scenario_id, n):
+                self.ingest(Observation(
+                    schema_version="0.1",
+                    observation_id=f"sim-{run_id}-{n}-{source}",
+                    source_id=source,
+                    source_type="simulator",
+                    observed_at=datetime.now(timezone.utc),
+                    position=Position(latitude=(y - 50) / 1000, longitude=(x - 50) / 1000),
+                    position_uncertainty_m=12.0,
+                    classification=classification,
+                    simulation=True,
+                ))
+            self._step += 1
+            return True
 
     def snapshot(self):
         # Copy nested mutable structures while holding lock.
@@ -299,6 +321,9 @@ class TrackStore:
             return {
                 "mode": "simulation",
                 "persistence": self.journal is not None,
+                "scenario_id": self._scenario_id,
+                "scenario_name": SCENARIOS[self._scenario_id]["name"],
+                "paused": self._paused,
                 "notice": "DEMO ONLY — fictional positions; not an operational detector",
                 "generated_at": utc_now(),
                 "tracks": sorted(tracks, key=lambda t: t["id"]),
