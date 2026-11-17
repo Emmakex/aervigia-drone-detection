@@ -118,7 +118,13 @@ def run_test():
                 page.locator("#usertoken").dispatch_event("change")
                 page.wait_for_function("document.querySelector('#trackcount').textContent !== '—'")
                 assert page.locator("#authidentity").inner_text().find("qaViewer") >= 0
-                assert page.locator("#alerts button").count() == 0, "Viewer must not acknowledge"
+                assert page.locator("#alerts button.ack, #alerts button.close-incident").count() == 0, "Viewer must not modify incidents"
+                assert page.locator("#report-tools").is_hidden(), "Bulk export is operator-only"
+                with page.expect_download() as single_file:
+                    page.locator("#alerts button.incident-report").first.click()
+                one = single_file.value
+                assert one.suggested_filename.startswith("aervigia-INC-")
+                assert '"simulation": true' in Path(one.path()).read_text(encoding="utf-8")
 
                 for width, height in [(1440, 900), (768, 1024), (390, 844), (320, 750)]:
                     page.set_viewport_size({"width": width, "height": height})
@@ -180,6 +186,19 @@ def run_test():
                 )
                 assert "qaOperator" in page.locator("#alerts").inner_text()
                 assert "Incidente cerrado" in page.locator("#audit").inner_text()
+                assert page.locator("#report-tools").is_visible()
+                with page.expect_download() as json_download:
+                    page.locator('#report-tools button[data-export="json"]').click()
+                document = json.loads(Path(json_download.value.path()).read_text(encoding="utf-8"))
+                assert document["simulation"] is True
+                assert document["filter"] == "closed"
+                assert document["exported_count"] >= 1
+                assert "latitude" not in str(document)
+                with page.expect_download() as csv_download:
+                    page.locator('#report-tools button[data-export="csv"]').click()
+                sheet = Path(csv_download.value.path()).read_bytes()
+                assert sheet.startswith(b"\\xef\\xbb\\xbf")
+                assert b"qaOperator" in sheet
                 page.screenshot(path=str(SHOTS / "aervigia-closed-history.png"), full_page=True)
                 page.locator('button.incident-filter[data-filter="open"]').click()
 
