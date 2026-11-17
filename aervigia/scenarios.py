@@ -54,7 +54,7 @@ def scenario_paths(scenario_id: str, step: int) -> list[tuple[str, float, float,
             ("bravo", 82 + sin(phase / 5) * 7, 84 + cos(phase / 4) * 7, "quadcopter"),
         ]
     return [
-        ("alpha", 24 + phase * 4.0, 51 + sin(phase / 5) * 3, "quadcopter"),
-        ("bravo", 77 - phase * 5.0, 54 + cos(phase / 5) * 3, "unknown"),
+        ("alpha", min(95, 24 + phase * 4.0), 51 + sin(phase / 5) * 3, "quadcopter"),
+        ("bravo", max(5, 77 - phase * 5.0), 54 + cos(phase / 5) * 3, "unknown"),
         ("charlie", 20 + sin(phase / 4) * 7, 85 + cos(phase / 6) * 5, "fixed-wing"),
     ]
