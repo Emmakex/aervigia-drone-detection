@@ -2,17 +2,21 @@
 
 import asyncio
 import hmac
+import json
 import os
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from aervigia import __version__
 from aervigia.auth import Identity, UserRegistry
 from aervigia.core import Observation, TrackStore
+from aervigia.reports import collection_report, csv_report, incident_report
 from aervigia.storage import SQLiteEventJournal
+from typing import Literal
 
 
 def create_app(engine: TrackStore | None = None, background: bool = True) -> FastAPI:
@@ -156,6 +160,59 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
             "simulation": True,
             "persistence": store.journal is not None,
             "actions": store.audit_actions(),
+        }
+
+    @application.get("/api/reports/incidents/export")
+    async def export_incident_reports(
+        format: Literal["json", "csv"] = "json",
+        status: Literal["all", "open", "pending", "acknowledged", "closed"] = "all",
+        x_view_key: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+    ):
+        # Bulk downloads require operator privileges even when read-only
+        # dashboard access is granted. Never include real observations.
+        authorize("operator", authorization, x_view_key, x_api_key)
+        report = collection_report(store.snapshot()["alerts"], status=status)
+        if format == "csv":
+            return Response(
+                content=csv_report(report),
+                media_type="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": "attachment; filename=aervigia-simulated-incidents.csv",
+                    "X-AERVIGIA-Simulation": "true",
+                },
+            )
+        return Response(
+            content=json.dumps(report, ensure_ascii=False, indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": "attachment; filename=aervigia-simulated-incidents.json",
+                "X-AERVIGIA-Simulation": "true",
+            },
+        )
+
+    @application.get("/api/reports/incidents/{reference}")
+    async def single_incident_report(
+        reference: str,
+        x_view_key: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+    ):
+        authorize("viewer", authorization, x_view_key, x_api_key)
+        incident = next(
+            (a for a in store.snapshot()["alerts"] if a.get("reference") == reference),
+            None,
+        )
+        if incident is None:
+            raise HTTPException(status_code=404, detail="Incident not in current recent window")
+        return {
+            "schema_version": "0.4",
+            "simulation": True,
+            "notice": "SIMULATED DEMO ONLY — not evidence of real airspace events",
+            "scope": "current-reset-only, latest 80 incidents; retention applies",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "incident": incident_report(incident),
         }
 
     @application.post("/api/observations", status_code=201)
