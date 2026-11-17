@@ -103,6 +103,11 @@ def run_test():
                 page = browser.new_page(viewport={"width": 1440, "height": 900},
                                         device_scale_factor=1)
                 page.goto(base, wait_until="domcontentloaded")
+                page.keyboard.press("Tab")
+                assert page.evaluate(
+                    "() => document.activeElement?.classList?.contains('skip-link')"
+                ), "Skip-to-content must be first keyboard focus target"
+                page.keyboard.press("Enter")
                 page.locator("#named-auth").wait_for(state="visible")
                 assert page.locator("#legacy-auth").is_hidden()
                 page.locator("#connection").get_attribute("id")
@@ -142,6 +147,15 @@ def run_test():
                 )
                 assert "qaOperator" in page.locator("#audit").inner_text()
                 page.screenshot(path=str(SHOTS / "aervigia-reviewed.png"), full_page=True)
+
+                # A local logout clears operational state and the personal token.
+                page.locator("#logout").click()
+                assert page.locator("#usertoken").input_value() == ""
+                assert page.locator("#trackcount").inner_text() == "—"
+                assert page.locator("#alerts button").count() == 0
+                page.locator("#usertoken").fill(operator)
+                page.locator("#usertoken").dispatch_event("change")
+                page.wait_for_function("document.querySelector('#trackcount').textContent !== '—'")
 
                 # A revoked operator loses visibility; old tracks must disappear.
                 registry.revoke("qaOperator")
