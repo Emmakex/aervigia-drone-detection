@@ -115,12 +115,20 @@
         <section class="panel" aria-labelledby="settings-title">
           <div class="heading"><h2 id="settings-title">Control de acceso para acciones</h2></div>
           <div class="settings">
+            <div id="named-auth" hidden>
+              <label for="usertoken">Credencial personal (cuenta individual)</label>
+              <input id="usertoken" type="password" autocomplete="off" placeholder="Token personal">
+              <small>No se guarda en el navegador. Los permisos dependen de tu rol y las revocaciones se aplican automáticamente.</small>
+              <p id="authidentity" class="muted" role="status">Sin identificar</p>
+            </div>
+            <div id="legacy-auth">
             <label for="viewkey">Clave de consulta (si se ha configurado)</label>
             <input id="viewkey" type="password" autocomplete="off" placeholder="AERVIGIA_VIEW_TOKEN">
             <small>Rol de consulta: visualización de trayectorias e historial, sin modificaciones.</small>
             <label for="apikey" style="margin-top:15px">Clave de operador (opcional)</label>
             <input id="apikey" type="password" autocomplete="off" placeholder="AERVIGIA_API_TOKEN">
-            <small>Rol operador: permite reconocer alertas y administrar la simulación. Las claves se mantienen solo en memoria de esta pestaña.</small>
+            <small>Modo de compatibilidad local: dos claves compartidas (sin identidad individual). Las claves se mantienen solo en memoria.</small>
+            </div>
           </div>
         </section>
 <section class="panel" aria-labelledby="audit-title">
@@ -133,13 +141,14 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.2 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.2.1 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
   const NS = "http://www.w3.org/2000/svg";
+  const access = { mode: "legacy", role: "viewer", user: null };
   const bounds = {x0: 40, x1: 860, y0: 30, y1: 530};
   const coordinate = (lat, lon) => ({
     x: bounds.x0 + (lon + 0.05) / 0.1 * (bounds.x1 - bounds.x0),
@@ -208,11 +217,15 @@
     }
   }
   async function ack(id) {
-    const token = $("apikey").value.trim();
-    if(!token) {window.alert("Introduce primero la clave de escritura del servidor.");return;}
+    const headers = {};
+    const token = access.mode === "named"
+      ? $("usertoken").value.trim() : $("apikey").value.trim();
+    if(!token) {window.alert("Introduce primero tu credencial de operador.");return;}
+    if(access.mode === "named") headers.Authorization = "Bearer "+token;
+    else headers["X-API-Key"] = token;
     try {
       const response = await fetch("/api/alerts/"+encodeURIComponent(id)+"/ack",{
-        method:"POST",headers:{"X-API-Key":token}
+        method:"POST",headers
       });
       if(!response.ok) {
         const data = await response.json();
@@ -233,7 +246,7 @@
       head.append(node("span",alert.acknowledged?"REVISADA":"PENDIENTE",alert.acknowledged?"chip ok":"chip"));
       section.append(head);
       section.append(node("div",alert.track_id+" · "+fmtTime(alert.at),"alert-meta"));
-      if(!alert.acknowledged) {
+      if(!alert.acknowledged && (access.mode !== "named" || ["operator","admin"].includes(access.role))) {
         const btn = node("button","Marcar como revisada","ack");
         btn.type="button";
         btn.addEventListener("click",()=>ack(alert.id));
@@ -282,8 +295,24 @@
       const viewHeaders = {};
       const viewerKey = $("viewkey").value.trim();
       const operatorKey = $("apikey").value.trim();
-      if(viewerKey) viewHeaders["X-View-Key"] = viewerKey;
-      if(operatorKey) viewHeaders["X-API-Key"] = operatorKey;
+      if(access.mode === "named") {
+        const personal = $("usertoken").value.trim();
+        if(personal) viewHeaders.Authorization = "Bearer "+personal;
+        const who = await fetch("/api/me",{cache:"no-store",headers:viewHeaders});
+        if(!who.ok) {
+          access.user = null;
+          access.role = "viewer";
+          $("authidentity").textContent = "Sin identificar";
+          throw new Error("Credencial personal ausente o no válida");
+        }
+        const identity = await who.json();
+        access.user = identity.user_id;
+        access.role = identity.role;
+        $("authidentity").textContent = "Sesión de consulta: "+identity.user_id+" · rol "+identity.role;
+      } else {
+        if(viewerKey) viewHeaders["X-View-Key"] = viewerKey;
+        if(operatorKey) viewHeaders["X-API-Key"] = operatorKey;
+      }
       const response = await fetch("/api/state",{cache:"no-store",headers:viewHeaders});
       if(!response.ok) throw new Error(response.status===401?"Introduce una clave de consulta válida":"HTTP "+response.status);
       const state = await response.json();
@@ -303,8 +332,23 @@
   }
   $("viewkey").addEventListener("change",refresh);
   $("apikey").addEventListener("change",refresh);
-  refresh();
-  window.setInterval(refresh,1500);
+  $("usertoken").addEventListener("change",refresh);
+  async function initialize() {
+    try {
+      const response = await fetch("/api/auth-mode",{cache:"no-store"});
+      if(!response.ok) throw new Error("HTTP "+response.status);
+      const mode = await response.json();
+      access.mode = mode.mode;
+      $("named-auth").hidden = access.mode !== "named";
+      $("legacy-auth").hidden = access.mode === "named";
+    } catch(error) {
+      $("connection").textContent = "No se pudo comprobar el modo de acceso";
+      return;
+    }
+    await refresh();
+    window.setInterval(refresh,1500);
+  }
+  initialize();
 })();
 </script>
 </body>
