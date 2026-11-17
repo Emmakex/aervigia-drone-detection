@@ -7,6 +7,8 @@ services:
       AERVIGIA_OPERATOR_ID: ${AERVIGIA_OPERATOR_ID:-local-operator}
       AERVIGIA_DB_PATH: /app/data/aervigia.sqlite3
       AERVIGIA_RETENTION_DAYS: ${AERVIGIA_RETENTION_DAYS:-7}
+      AERVIGIA_RETENTION_SWEEP_SECONDS: ${AERVIGIA_RETENTION_SWEEP_SECONDS:-3600}
+      AERVIGIA_USERS_FILE: ${AERVIGIA_USERS_FILE:-}
     volumes:
       - aervigia-data:/app/data
     ports:

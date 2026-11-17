@@ -41,3 +41,24 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/api/state)" = "401"
           curl -fsS -H 'X-View-Key: ci-view-only-token' http://127.0.0.1:18000/api/state
           docker exec aervigia-ci-test test -f /app/data/events.sqlite3
+      - name: Smoke-test named identities in Docker
+        run: |
+          set -euo pipefail
+          docker run -d --name aervigia-named-ci \
+            -p 127.0.0.1:18001:8000 \
+            -e AERVIGIA_DB_PATH=/app/data/events.sqlite3 \
+            -e AERVIGIA_USERS_FILE=/app/data/users.json \
+            aervigia-ci
+          trap 'docker logs aervigia-named-ci || true; docker rm -f aervigia-named-ci || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18001/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz1234567890' http://127.0.0.1:18001/api/state)" = "503"
+          VIEWER_TOKEN="$(docker exec aervigia-named-ci python -m aervigia.auth --file /app/data/users.json add --user ciViewer --role viewer | tail -n 1)"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18001/api/state)" = "401"
+          curl -fsS -H "Authorization: Bearer ${VIEWER_TOKEN}" http://127.0.0.1:18001/api/me
+          curl -fsS -H "Authorization: Bearer ${VIEWER_TOKEN}" http://127.0.0.1:18001/api/state >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${VIEWER_TOKEN}" http://127.0.0.1:18001/api/simulation/reset)" = "403"
+          docker exec aervigia-named-ci python -m aervigia.auth --file /app/data/users.json revoke --user ciViewer
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${VIEWER_TOKEN}" http://127.0.0.1:18001/api/state)" = "401"

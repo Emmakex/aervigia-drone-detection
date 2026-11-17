@@ -4,7 +4,7 @@
 
 AERVIGIA is an independent, hardware-agnostic software platform for **passive drone awareness, low-altitude airspace monitoring and incident management**. Its first release focuses on combining observations from authorized sources into a clear operational picture for human operators.
 
-> **Status:** v0.2 local development prototype. Simulated observations only; there is no live drone detection.
+> **Status:** v0.2.1 local development prototype. Simulated observations only; there is no live drone detection.
 
 ## Quick start (local demo)
 
@@ -16,19 +16,22 @@ AERVIGIA is an independent, hardware-agnostic software platform for **passive dr
 
 Or use `docker compose up --build`. See [local run guide](docs/RUN.md) for details.
 
-By default, read-only access is available on localhost. Set
-`AERVIGIA_VIEW_TOKEN` to require a viewer key. All writes remain disabled until
-`AERVIGIA_API_TOKEN` is configured. Docker Compose enables a persistent SQLite
-journal in a named volume. **Do not expose this demo to the public Internet.**
+By default, read-only access is available on localhost in compatibility mode.
+To enable named accounts, provision users with `python -m aervigia.auth` and set
+`AERVIGIA_USERS_FILE`; legacy shared keys are then ignored. Docker Compose
+provides a local persistent SQLite journal with hourly retention sweeps.
+See [local run guide](docs/RUN.md) for account provisioning and revocation.
+**Do not expose this demo to the public Internet.**
 
-## Current implementation (v0.2)
+## Current implementation (v0.2.1)
 
 - Python/FastAPI and Pydantic-validated synthetic observation API.
 - Self-contained responsive HTML/CSS/JavaScript dashboard with synthetic tracks.
 - Two deterministic simulator sources and a fictional protected zone.
 - Zone-entry alerts, operator acknowledgments with write token and timeline.
 - Optional persistent SQLite event journal with replay and startup retention (1–30 days).
-- Separate viewer/operator keys and an operator-action history; no individual user accounts yet.
+- Optional named viewer/operator/admin accounts with revocable personal bearer tokens and per-user audit attribution.
+- Legacy local shared keys remain available only when the named-user registry is disabled.
 - No multi-sensor fusion or real equipment.
 - Automated unit/API tests in GitHub Actions.
 
@@ -86,7 +89,7 @@ The repository is intentionally separate from Kairoseth and other products. Publ
 
 - API: Python + FastAPI, typed schemas.
 - Web dashboard: dependency-free HTML/CSS/JS for the demo; Next.js/TypeScript may follow only if justified.
-- Data: SQLite event journal for the local demo, or memory-only if not configured. PostgreSQL/PostGIS remains deferred.
+- Data: SQLite event journal for the local demo, with ongoing expiry, or memory-only if not configured. PostgreSQL/PostGIS remains deferred.
 - Local development: Docker Compose.
 - Testing: synthetic event fixtures with deterministic trajectories.
 
@@ -99,10 +102,11 @@ The first prototype is deliberately minimal to validate UX and event handling be
 - [x] Build a simulated track dashboard
 - [x] Add a hard-coded demo zone and human-reviewed, in-memory alerts
 - [x] Validate automated tests and JavaScript syntax in CI
-- [x] Add SQLite journal, restart replay and startup retention
+- [x] Add SQLite journal, restart replay and startup plus continuous retention
 - [x] Add local viewer/operator keys and an audit endpoint for operator actions
 - [ ] Verify the visual dashboard manually and improve accessibility
-- [ ] Add named multi-user RBAC, ongoing retention and production-grade security
+- [x] Add named-account roles, revocable personal tokens and runtime retention sweeps
+- [ ] Add external identity integration, session expiry, MFA and production-grade security
 - [ ] Evaluate multi-sensor integrations after safety and legal review
 
 ## License and ownership

@@ -174,6 +174,34 @@ class TrackStore:
                     return True
         return False
 
+    def maintain(self) -> int:
+        """Enforce retention during runtime and evict expired in-memory events.
+
+        The journal is the source of truth. Locking preserves atomicity with
+        simultaneous simulator ticks and operator reviews.
+        """
+        with self._lock:
+            if self.journal is None:
+                return 0
+            removed = self.journal.purge_expired()
+            if not removed:
+                return 0
+            saved_run, saved_step = self._run_id, self._step
+            self.reset(replay=True)
+            for kind, payload in self.journal.iter_events():
+                if kind == "observation":
+                    self.ingest(Observation.model_validate(payload), replay=True)
+                elif kind == "ack":
+                    self.acknowledge(
+                        payload["alert_id"], actor=payload["actor"],
+                        at=payload["at"], replay=True,
+                    )
+                elif kind == "reset":
+                    self.reset(replay=True)
+            # Keep the running simulator's series continuous after maintenance.
+            self._run_id, self._step = saved_run, saved_step
+            return removed
+
     def audit_actions(self, limit: int = 50) -> list[dict]:
         if self.journal is None:
             return []
