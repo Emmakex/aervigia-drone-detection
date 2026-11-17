@@ -11,11 +11,22 @@ from fastapi.responses import FileResponse
 
 from aervigia import __version__
 from aervigia.core import Observation, TrackStore
+from aervigia.storage import SQLiteEventJournal
 
 
 def create_app(engine: TrackStore | None = None, background: bool = True) -> FastAPI:
-    store = engine if engine is not None else TrackStore()
+    db_path = os.environ.get("AERVIGIA_DB_PATH", "").strip()
+    owns_journal = engine is None and bool(db_path)
+    journal = (
+        SQLiteEventJournal(
+            db_path, retention_days=int(os.environ.get("AERVIGIA_RETENTION_DAYS", "7"))
+        )
+        if owns_journal else None
+    )
+    store = engine if engine is not None else TrackStore(journal=journal)
     api_token = os.environ.get("AERVIGIA_API_TOKEN", "")
+    view_token = os.environ.get("AERVIGIA_VIEW_TOKEN", "")
+    operator_id = os.environ.get("AERVIGIA_OPERATOR_ID", "local-operator")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -35,6 +46,8 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
                     await task
                 except asyncio.CancelledError:
                     pass
+            if owns_journal and journal is not None:
+                journal.close()
 
     application = FastAPI(
         title="AERVIGIA — Simulation API",
@@ -48,6 +61,16 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
             raise HTTPException(status_code=503, detail="Writes disabled: AERVIGIA_API_TOKEN not configured")
         if not candidate or not hmac.compare_digest(candidate, api_token):
             raise HTTPException(status_code=401, detail="Invalid API key")
+
+    def require_view_token(view_candidate: str | None, write_candidate: str | None):
+        # Separate viewer/operator roles for a local demo (not individual user accounts).
+        if not view_token:
+            return
+        if (view_candidate and hmac.compare_digest(view_candidate, view_token)) or (
+            api_token and write_candidate and hmac.compare_digest(write_candidate, api_token)
+        ):
+            return
+        raise HTTPException(status_code=401, detail="Valid viewer key required")
 
     @application.middleware("http")
     async def no_store(request, call_next):
@@ -65,8 +88,24 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
         return {"status": "ok", "version": __version__, "mode": "simulation"}
 
     @application.get("/api/state")
-    async def state():
+    async def state(
+        x_view_key: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        require_view_token(x_view_key, x_api_key)
         return store.snapshot()
+
+    @application.get("/api/audit")
+    async def audit(
+        x_view_key: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        require_view_token(x_view_key, x_api_key)
+        return {
+            "simulation": True,
+            "persistence": store.journal is not None,
+            "actions": store.audit_actions(),
+        }
 
     @application.post("/api/observations", status_code=201)
     async def submit_observation(observation: Observation, x_api_key: str | None = Header(default=None)):
@@ -78,14 +117,14 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
     @application.post("/api/alerts/{alert_id}/ack")
     async def acknowledge_alert(alert_id: str, x_api_key: str | None = Header(default=None)):
         require_write_token(x_api_key)
-        if not store.acknowledge(alert_id):
+        if not store.acknowledge(alert_id, actor=operator_id):
             raise HTTPException(status_code=404, detail="Alert not found")
         return {"id": alert_id, "acknowledged": True}
 
     @application.post("/api/simulation/reset")
     async def reset_simulation(x_api_key: str | None = Header(default=None)):
         require_write_token(x_api_key)
-        store.reset()
+        store.reset(actor=operator_id)
         store.advance()
         return {"reset": True, "mode": "simulation"}
 
