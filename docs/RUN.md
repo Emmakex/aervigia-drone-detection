@@ -1,4 +1,4 @@
-# AERVIGIA v0.3.0 — Laboratorio local de observaciones simuladas
+# AERVIGIA v0.4.0 — Laboratorio local de observaciones simuladas
 
 **No apto para despliegue público ni decisiones operativas.** Las trayectorias, zonas y eventos son ficticios; ningún sensor real está conectado.
 
@@ -10,7 +10,7 @@ docker compose up --build
 
 Abre http://127.0.0.1:8000. El panel es de solo lectura hasta configurar una clave de escritura; por defecto Docker solo publica el puerto en `127.0.0.1`.
 
-La demo v0.3.0 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
+La demo v0.4.0 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
 
 ## Cuentas individuales y roles — modo recomendado
 
@@ -56,7 +56,7 @@ Si se configura `AERVIGIA_USERS_FILE` pero no existe el fichero, la API **rechaz
 
 > No es un servicio de identidad listo para producción: no existen aún sesiones limitadas temporalmente, SSO, MFA, limitación de intentos, gestión centralizada de identidades ni controles de seguridad para Internet. Cada token es permanente hasta su revocación. El registro no es inmutable ni a prueba de manipulaciones.
 
-## Gestión de incidentes (v0.3.0)
+## Gestión de incidentes (v0.4.0)
 
 El panel incorpora filtros **Abiertos, Pendientes, Revisados, Cerrados y Todos**.
 El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
@@ -67,6 +67,38 @@ El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
 - El listado del panel **muestra como máximo los 80 incidentes recientes** por limitaciones del laboratorio. No es un archivo completo e ilimitado. El diario local mantiene los eventos dentro de su retención configurada.
 - Los incidentes cerrados desaparecen del filtro «Abiertos», pero permanecen consultables en «Cerrados» mientras sigan en la ventana reciente y de retención.
 - Las bases SQLite creadas con v0.2 se migran al abrirlas para registrar los nuevos eventos de cierre.
+
+## Informes y exportación (v0.4.0)
+
+El centro de mando permite descargar un informe individual **JSON** por incidente
+a usuarios autorizados y exportar un lote reciente como **JSON o CSV** únicamente
+a operadores y administradores. El filtro del panel (Abiertos, Pendientes,
+Revisados, Cerrados, Todos) también se aplica a las descargas masivas.
+
+- Máximo **80 incidentes recientes del estado actual** por descarga; no es una copia completa del diario ni una exportación histórica entre reinicios.
+- Cada informe incluye referencia, estado, tipo, zona de demostración,
+  pista simulada, fecha de detección, revisor, fecha de revisión,
+  cierre, responsable y marca explícita `simulation: true`.
+- **No** incluye coordenadas geográficas, posiciones, señales brutas,
+  datos de sensores físicos ni credenciales.
+- Las descargas no cambian el estado de un incidente. Los CSV incluyen BOM
+  UTF-8 para compatibilidad con hojas de cálculo y neutralizan texto que
+  podría ejecutarse como fórmula.
+- Los informes son artefactos de demostración y **no** tienen validez
+  probatoria, cadena de custodia o firma digital.
+- La disponibilidad de incidentes depende de los 80 últimos eventos de la
+  simulación y de la retención SQLite. Los registros antiguos y de un
+  reinicio anterior no se incluyen en estos archivos.
+
+**Ejemplo local, con cuenta individual de operador (sin exponer el token):**
+
+```bash
+curl -fsS -H "Authorization: Bearer ${AERVIGIA_PERSONAL_TOKEN}" \
+  "http://127.0.0.1:8000/api/reports/incidents/export?format=csv&status=closed" \
+  -o incidentes-simulados.csv
+```
+
+Nunca incluyas tokens en el repositorio, en capturas ni en incidencias.
 
 ## Retención continua
 
@@ -103,6 +135,8 @@ El directorio `data/` está excluido de Git. Mantén las credenciales y la base 
 | GET | `/api/me` | Identidad y rol de la credencial |
 | GET | `/api/state` | Viewer, operator, admin |
 | GET | `/api/audit` | Viewer, operator, admin |
+| GET | `/api/reports/incidents/{reference}` | Viewer, operator, admin; single simulated report |
+| GET | `/api/reports/incidents/export?format=json&status=all` | Operator, admin; bulk JSON/CSV download |
 | POST | `/api/observations` | Operator, admin; simulaciones únicamente |
 | POST | `/api/alerts/{id}/ack` | Operator, admin; marcar como revisado |
 | POST | `/api/incidents/{id}/close` | Operator, admin; cerrar solo tras revisión |
