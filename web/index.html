@@ -353,9 +353,11 @@
     el.append(list);
   }
   let loading = false;
+  let authEpoch = 0;
   async function refresh() {
     if(loading) return;
     loading = true;
+    const epoch = authEpoch;
     try {
       const viewHeaders = {};
       const viewerKey = $("viewkey").value.trim();
@@ -372,6 +374,7 @@
         }
         viewHeaders.Authorization = "Bearer "+personal;
         const who = await fetch("/api/me",{cache:"no-store",headers:viewHeaders});
+        if(epoch !== authEpoch) return;
         if(!who.ok) {
           access.user = null;
           access.role = "viewer";
@@ -387,8 +390,10 @@
         if(operatorKey) viewHeaders["X-API-Key"] = operatorKey;
       }
       const response = await fetch("/api/state",{cache:"no-store",headers:viewHeaders});
+      if(epoch !== authEpoch) return;
       if(!response.ok) throw new Error(response.status===401?"Introduce una clave de consulta válida":"HTTP "+response.status);
       const state = await response.json();
+      if(epoch !== authEpoch) return;
       $("trackcount").textContent = state.tracks.length;
       $("alertcount").textContent = state.alerts.filter(a=>!a.acknowledged).length;
       $("sourcecount").textContent = new Set(state.tracks.map(t=>t.source_id)).size;
@@ -396,20 +401,29 @@
       setText("connection", "Simulación conectada · actualización 1,5 s");
       draw(state);renderTracks(state.tracks);renderAlerts(state.alerts);renderEvents(state.events);
       const auditResponse = await fetch("/api/audit",{cache:"no-store",headers:viewHeaders});
+      if(epoch !== authEpoch) return;
       if(auditResponse.ok){
         const auditData = await auditResponse.json();
         renderAudit(auditData.actions, auditData.persistence);
       }
     } catch(error) {
+      if(epoch !== authEpoch) return;
       setText("connection", "Error de conexión: " + String(error.message || error));
       clearOperationalData();
       feedback("No se muestran datos hasta recuperar un acceso válido.", true);
     } finally {loading = false;}
   }
-  $("viewkey").addEventListener("change",refresh);
-  $("apikey").addEventListener("change",refresh);
-  $("usertoken").addEventListener("change",refresh);
+  function credentialChanged() {
+    authEpoch++;
+    clearOperationalData();
+    setText("connection", "Verificando credencial…");
+    refresh();
+  }
+  $("viewkey").addEventListener("change", credentialChanged);
+  $("apikey").addEventListener("change", credentialChanged);
+  $("usertoken").addEventListener("change", credentialChanged);
   $("logout").addEventListener("click", () => {
+    authEpoch++;
     $("usertoken").value = "";
     access.user = null;
     access.role = "viewer";
