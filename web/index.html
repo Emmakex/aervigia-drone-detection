@@ -51,6 +51,8 @@
     .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
     .ack:hover{background:#225375}
     .ack:disabled{opacity:.6;cursor:progress}
+    .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
+    .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
     table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
     th{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#8fa9c3;background:#10273b}
@@ -133,6 +135,7 @@
               <input id="usertoken" type="password" autocomplete="off" placeholder="Token personal">
               <small>No se guarda en el navegador. Los permisos dependen de tu rol y las revocaciones se aplican automáticamente.</small>
               <p id="authidentity" class="muted" role="status">Sin identificar</p>
+              <button id="logout" type="button" class="logout">Cerrar sesión local</button>
             </div>
             <div id="legacy-auth">
               <label for="viewkey">Clave de consulta (si se ha configurado)</label>
@@ -162,9 +165,13 @@
   const $ = id => document.getElementById(id);
   const NS = "http://www.w3.org/2000/svg";
   const access = { mode: "legacy", role: "viewer", user: null };
+  function setText(id, message) {
+    const element = $(id);
+    if(element.textContent !== message) element.textContent = message;
+  }
   function feedback(message, isError = false) {
     const element = $("operation-feedback");
-    element.textContent = message;
+    setText("operation-feedback", message);
     element.classList.toggle("error", isError);
   }
   function clearOperationalData() {
@@ -355,18 +362,26 @@
       const operatorKey = $("apikey").value.trim();
       if(access.mode === "named") {
         const personal = $("usertoken").value.trim();
-        if(personal) viewHeaders.Authorization = "Bearer "+personal;
+        if(!personal) {
+          access.user = null;
+          access.role = "viewer";
+          setText("authidentity", "Sin identificar");
+          setText("connection", "Introduce tu credencial personal");
+          clearOperationalData();
+          return;
+        }
+        viewHeaders.Authorization = "Bearer "+personal;
         const who = await fetch("/api/me",{cache:"no-store",headers:viewHeaders});
         if(!who.ok) {
           access.user = null;
           access.role = "viewer";
-          $("authidentity").textContent = "Sin identificar";
+          setText("authidentity", "Sin identificar");
           throw new Error("Credencial personal ausente o no válida");
         }
         const identity = await who.json();
         access.user = identity.user_id;
         access.role = identity.role;
-        $("authidentity").textContent = "Sesión de consulta: "+identity.user_id+" · rol "+identity.role;
+        setText("authidentity", "Usuario: "+identity.user_id+" · rol "+identity.role);
       } else {
         if(viewerKey) viewHeaders["X-View-Key"] = viewerKey;
         if(operatorKey) viewHeaders["X-API-Key"] = operatorKey;
@@ -378,7 +393,7 @@
       $("alertcount").textContent = state.alerts.filter(a=>!a.acknowledged).length;
       $("sourcecount").textContent = new Set(state.tracks.map(t=>t.source_id)).size;
       $("stepcount").textContent = state.step;
-      $("connection").textContent = "Simulación conectada · actualización 1,5 s";
+      setText("connection", "Simulación conectada · actualización 1,5 s");
       draw(state);renderTracks(state.tracks);renderAlerts(state.alerts);renderEvents(state.events);
       const auditResponse = await fetch("/api/audit",{cache:"no-store",headers:viewHeaders});
       if(auditResponse.ok){
@@ -386,7 +401,7 @@
         renderAudit(auditData.actions, auditData.persistence);
       }
     } catch(error) {
-      $("connection").textContent = "Error de conexión: " + String(error.message || error);
+      setText("connection", "Error de conexión: " + String(error.message || error));
       clearOperationalData();
       feedback("No se muestran datos hasta recuperar un acceso válido.", true);
     } finally {loading = false;}
@@ -394,6 +409,16 @@
   $("viewkey").addEventListener("change",refresh);
   $("apikey").addEventListener("change",refresh);
   $("usertoken").addEventListener("change",refresh);
+  $("logout").addEventListener("click", () => {
+    $("usertoken").value = "";
+    access.user = null;
+    access.role = "viewer";
+    setText("authidentity", "Sin identificar");
+    setText("connection", "Sesión local cerrada");
+    clearOperationalData();
+    feedback("Sesión local cerrada. No se guardan credenciales en el navegador.");
+    $("usertoken").focus();
+  });
   async function initialize() {
     try {
       const response = await fetch("/api/auth-mode",{cache:"no-store"});
