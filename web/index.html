@@ -114,10 +114,18 @@
         </section>
         <section class="panel" aria-labelledby="settings-title">
           <div class="heading"><h2 id="settings-title">Control de acceso para acciones</h2></div>
-          <div class="settings"><label for="apikey">Clave local de escritura (opcional)</label>
+          <div class="settings">
+            <label for="viewkey">Clave de consulta (si se ha configurado)</label>
+            <input id="viewkey" type="password" autocomplete="off" placeholder="AERVIGIA_VIEW_TOKEN">
+            <small>Rol de consulta: visualización de trayectorias e historial, sin modificaciones.</small>
+            <label for="apikey" style="margin-top:15px">Clave de operador (opcional)</label>
             <input id="apikey" type="password" autocomplete="off" placeholder="AERVIGIA_API_TOKEN">
-            <small>Solo se mantiene en memoria de esta pestaña. Se usa para reconocer alertas; sin clave la demo es de solo lectura.</small>
+            <small>Rol operador: permite reconocer alertas y administrar la simulación. Las claves se mantienen solo en memoria de esta pestaña.</small>
           </div>
+        </section>
+<section class="panel" aria-labelledby="audit-title">
+          <div class="heading"><h2 id="audit-title">Auditoría de revisiones</h2><span class="muted">Persistencia opcional</span></div>
+          <div id="audit"><p class="hint">Sin acciones registradas.</p></div>
         </section>
         <section class="panel" aria-labelledby="activity-title">
           <div class="heading"><h2 id="activity-title">Actividad reciente</h2></div>
@@ -125,7 +133,7 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.1 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.2 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
@@ -234,6 +242,26 @@
       region.append(section);
     });
   }
+  function renderAudit(actions, persistence) {
+    const el = $("audit");
+    el.replaceChildren();
+    if(!persistence) {
+      el.append(node("p","Persistencia desactivada. Configura AERVIGIA_DB_PATH.","hint"));
+      return;
+    }
+    if(!actions.length) {
+      el.append(node("p","Todavía no hay revisiones o reinicios.","hint"));
+      return;
+    }
+    const list = node("ul");
+    list.style.cssText="padding:0 17px 6px 30px;font-size:12px;color:#a9bdd1;line-height:1.9";
+    actions.slice(0,6).forEach(action => {
+      const who = action.details.actor || "operador";
+      const what = action.action === "ack" ? "Alerta revisada" : "Simulación reiniciada";
+      list.append(node("li",fmtTime(action.recorded_at)+" · "+what+" · "+who));
+    });
+    el.append(list);
+  }
   function renderEvents(events) {
     const el = $("events");
     el.replaceChildren();
@@ -251,8 +279,13 @@
     if(loading) return;
     loading = true;
     try {
-      const response = await fetch("/api/state",{cache:"no-store"});
-      if(!response.ok) throw new Error("HTTP "+response.status);
+      const viewHeaders = {};
+      const viewerKey = $("viewkey").value.trim();
+      const operatorKey = $("apikey").value.trim();
+      if(viewerKey) viewHeaders["X-View-Key"] = viewerKey;
+      if(operatorKey) viewHeaders["X-API-Key"] = operatorKey;
+      const response = await fetch("/api/state",{cache:"no-store",headers:viewHeaders});
+      if(!response.ok) throw new Error(response.status===401?"Introduce una clave de consulta válida":"HTTP "+response.status);
       const state = await response.json();
       $("trackcount").textContent = state.tracks.length;
       $("alertcount").textContent = state.alerts.filter(a=>!a.acknowledged).length;
@@ -260,9 +293,16 @@
       $("stepcount").textContent = state.step;
       $("connection").textContent = "Simulación conectada · actualización 1,5 s";
       draw(state);renderTracks(state.tracks);renderAlerts(state.alerts);renderEvents(state.events);
+      const auditResponse = await fetch("/api/audit",{cache:"no-store",headers:viewHeaders});
+      if(auditResponse.ok){
+        const auditData = await auditResponse.json();
+        renderAudit(auditData.actions, auditData.persistence);
+      }
     } catch(error) {$("connection").textContent = "Error de conexión: "+String(error.message || error);}
     finally {loading = false;}
   }
+  $("viewkey").addEventListener("change",refresh);
+  $("apikey").addEventListener("change",refresh);
   refresh();
   window.setInterval(refresh,1500);
 })();

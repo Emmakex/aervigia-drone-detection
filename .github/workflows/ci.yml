@@ -23,3 +23,21 @@ jobs:
           node --check /tmp/aervigia-inline.js
       - name: Run automated tests
         run: python -m pytest -q
+      - name: Build Docker image and smoke-test local API
+        run: |
+          set -euo pipefail
+          docker build -t aervigia-ci .
+          docker run -d --name aervigia-ci-test \
+            -p 127.0.0.1:18000:8000 \
+            -e AERVIGIA_DB_PATH=/app/data/events.sqlite3 \
+            -e AERVIGIA_VIEW_TOKEN=ci-view-only-token \
+            aervigia-ci
+          trap 'docker logs aervigia-ci-test || true; docker rm -f aervigia-ci-test || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18000/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18000/healthz
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/api/state)" = "401"
+          curl -fsS -H 'X-View-Key: ci-view-only-token' http://127.0.0.1:18000/api/state
+          docker exec aervigia-ci-test test -f /app/data/events.sqlite3

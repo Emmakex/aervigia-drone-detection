@@ -58,3 +58,43 @@ def test_dashboard_served(monkeypatch):
         response = client.get("/")
         assert response.status_code == 200
         assert "AERVIGIA" in response.text
+
+
+def test_viewer_key_can_read_but_cannot_mutate(monkeypatch):
+    monkeypatch.setenv("AERVIGIA_VIEW_TOKEN", "demo-viewer")
+    monkeypatch.setenv("AERVIGIA_API_TOKEN", "demo-operator")
+    with TestClient(create_app(TrackStore(), background=False)) as client:
+        assert client.get("/api/state").status_code == 401
+        assert client.get("/api/audit").status_code == 401
+        assert client.get("/api/state", headers={"X-View-Key": "wrong"}).status_code == 401
+        assert client.get("/api/state", headers={"X-View-Key": "demo-viewer"}).status_code == 200
+        assert client.get("/api/audit", headers={"X-View-Key": "demo-viewer"}).status_code == 200
+        assert client.get("/api/state", headers={"X-API-Key": "demo-operator"}).status_code == 200
+        assert client.post("/api/observations", headers={"X-View-Key": "demo-viewer"}, json=payload()).status_code == 401
+
+
+def test_persisted_incident_survives_application_restart(monkeypatch, tmp_path):
+    monkeypatch.setenv("AERVIGIA_DB_PATH", str(tmp_path / "events.sqlite3"))
+    monkeypatch.setenv("AERVIGIA_VIEW_TOKEN", "demo-viewer")
+    monkeypatch.setenv("AERVIGIA_API_TOKEN", "demo-operator")
+    monkeypatch.setenv("AERVIGIA_OPERATOR_ID", "shift-lead")
+    monkeypatch.setenv("AERVIGIA_RETENTION_DAYS", "7")
+    viewer = {"X-View-Key": "demo-viewer"}
+    operator = {"X-API-Key": "demo-operator"}
+    with TestClient(create_app(background=False)) as client:
+        assert client.post("/api/observations", json=payload(), headers=operator).status_code == 201
+        alert = client.get("/api/state", headers=viewer).json()["alerts"][0]
+        assert client.post(f"/api/alerts/{alert['id']}/ack", headers=operator).status_code == 200
+
+    with TestClient(create_app(background=False)) as client:
+        data = client.get("/api/state", headers=viewer).json()
+        assert data["persistence"] is True
+        assert data["alerts"][0]["acknowledged"] is True
+        assert data["alerts"][0]["acknowledged_by"] == "shift-lead"
+        audit = client.get("/api/audit", headers=viewer).json()
+        assert audit["actions"][0]["details"]["actor"] == "shift-lead"
+        assert client.post("/api/simulation/reset", headers=operator).status_code == 200
+
+    with TestClient(create_app(background=False)) as client:
+        assert client.get("/api/state", headers=viewer).json()["alerts"] == []
+        assert client.get("/api/audit", headers=viewer).json()["actions"][0]["action"] == "reset"

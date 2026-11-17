@@ -4,7 +4,7 @@
 
 AERVIGIA is an independent, hardware-agnostic software platform for **passive drone awareness, low-altitude airspace monitoring and incident management**. Its first release focuses on combining observations from authorized sources into a clear operational picture for human operators.
 
-> **Status:** v0.1 simulation-first prototype. The API and dashboard process fictional observations only; there is no live drone detection.
+> **Status:** v0.2 local development prototype. Simulated observations only; there is no live drone detection.
 
 ## Quick start (local demo)
 
@@ -16,17 +16,20 @@ AERVIGIA is an independent, hardware-agnostic software platform for **passive dr
 
 Or use `docker compose up --build`. See [local run guide](docs/RUN.md) for details.
 
-No token is necessary to view the fictional simulation. The API is read-only
-unless `AERVIGIA_API_TOKEN` is explicitly configured; **do not expose this demo
-to the public Internet**.
+By default, read-only access is available on localhost. Set
+`AERVIGIA_VIEW_TOKEN` to require a viewer key. All writes remain disabled until
+`AERVIGIA_API_TOKEN` is configured. Docker Compose enables a persistent SQLite
+journal in a named volume. **Do not expose this demo to the public Internet.**
 
-## Current implementation (v0.1)
+## Current implementation (v0.2)
 
 - Python/FastAPI and Pydantic-validated synthetic observation API.
 - Self-contained responsive HTML/CSS/JavaScript dashboard with synthetic tracks.
 - Two deterministic simulator sources and a fictional protected zone.
 - Zone-entry alerts, operator acknowledgments with write token and timeline.
-- In-memory storage only; no multi-sensor fusion, user accounts or real equipment.
+- Optional persistent SQLite event journal with replay and startup retention (1–30 days).
+- Separate viewer/operator keys and an operator-action history; no individual user accounts yet.
+- No multi-sensor fusion or real equipment.
 - Automated unit/API tests in GitHub Actions.
 
 ## Product goals
@@ -38,7 +41,7 @@ to the public Internet**.
 - Configure protected zones, authorized flights and human-reviewed alerts.
 - Maintain an auditable incident history with appropriate retention controls.
 
-## MVP v0.1 — narrowly scoped
+## MVP scope — initial v0.1 baseline
 
 1. **Simulation-first demo:** generate synthetic drone observation events for repeatable testing.
 2. **Ingestion API:** receive and validate observation messages with a documented schema.
@@ -83,7 +86,7 @@ The repository is intentionally separate from Kairoseth and other products. Publ
 
 - API: Python + FastAPI, typed schemas.
 - Web dashboard: dependency-free HTML/CSS/JS for the demo; Next.js/TypeScript may follow only if justified.
-- Data: in-memory prototype; PostgreSQL/PostGIS is deferred until persistence is required.
+- Data: SQLite event journal for the local demo, or memory-only if not configured. PostgreSQL/PostGIS remains deferred.
 - Local development: Docker Compose.
 - Testing: synthetic event fixtures with deterministic trajectories.
 
@@ -95,8 +98,11 @@ The first prototype is deliberately minimal to validate UX and event handling be
 - [x] Implement an authenticated-write ingestion API with validation
 - [x] Build a simulated track dashboard
 - [x] Add a hard-coded demo zone and human-reviewed, in-memory alerts
-- [ ] Validate CI and the demo end to end
-- [ ] Add durable incident history and configured retention
+- [x] Validate automated tests and JavaScript syntax in CI
+- [x] Add SQLite journal, restart replay and startup retention
+- [x] Add local viewer/operator keys and an audit endpoint for operator actions
+- [ ] Verify the visual dashboard manually and improve accessibility
+- [ ] Add named multi-user RBAC, ongoing retention and production-grade security
 - [ ] Evaluate multi-sensor integrations after safety and legal review
 
 ## License and ownership

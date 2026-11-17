@@ -1,9 +1,12 @@
-"""Deterministic, in-memory SIMULATED observations; no live drone collection."""
+"""Deterministic synthetic observation engine with optional event replay."""
 
 from collections import deque
 from datetime import datetime, timezone
 from math import sin
 from threading import RLock
+from uuid import uuid4
+
+from aervigia.storage import SQLiteEventJournal
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
@@ -47,10 +50,12 @@ ZONE = {
 
 
 class TrackStore:
-    """Thread-safe, bounded demo state. Not a multi-sensor fusion engine."""
+    """Thread-safe demo state; optional SQLite replay. Not multi-sensor fusion."""
 
-    def __init__(self):
+    def __init__(self, journal: SQLiteEventJournal | None = None):
         self._lock = RLock()
+        self.journal = journal
+        self._run_id = uuid4().hex[:12]
         self._step = 0
         self._tracks = {}
         self._alerts = []
@@ -59,9 +64,24 @@ class TrackStore:
         self._recent_observations = deque(maxlen=1000)
         self._seen_observations = set()
         self._alert_seq = 0
+        if self.journal is not None:
+            # A reset event is replayed in order, preserving only current history.
+            for kind, payload in self.journal.iter_events():
+                if kind == "observation":
+                    self.ingest(Observation.model_validate(payload), replay=True)
+                elif kind == "ack":
+                    self.acknowledge(
+                        payload["alert_id"], actor=payload["actor"],
+                        at=payload["at"], replay=True
+                    )
+                elif kind == "reset":
+                    self.reset(replay=True)
 
-    def reset(self):
+    def reset(self, replay: bool = False, actor: str = "local-operator"):
         with self._lock:
+            if self.journal is not None and not replay:
+                self.journal.append("reset", {"actor": actor, "at": utc_now()})
+            self._run_id = uuid4().hex[:12]
             self._step = 0
             self._tracks.clear()
             self._alerts.clear()
@@ -71,11 +91,17 @@ class TrackStore:
             self._seen_observations.clear()
             self._alert_seq = 0
 
-    def ingest(self, observation: Observation):
+    def ingest(self, observation: Observation, replay: bool = False):
         # Tracks are keyed by source. This is a demonstration, not sensor fusion.
         with self._lock:
             if observation.observation_id in self._seen_observations:
                 return {"duplicate": True, "track_id": f"SIM-{observation.source_id}"}
+            if self.journal is not None and not replay:
+                if not self.journal.append(
+                    "observation", observation.model_dump(mode="json"),
+                    event_id=observation.observation_id,
+                ):
+                    return {"duplicate": True, "track_id": f"SIM-{observation.source_id}"}
             if len(self._recent_observations) == self._recent_observations.maxlen:
                 oldest = self._recent_observations.popleft()
                 self._seen_observations.discard(oldest)
@@ -129,21 +155,36 @@ class TrackStore:
                 self._inside.discard(tid)
             return {"duplicate": False, "track_id": tid}
 
-    def acknowledge(self, alert_id: str) -> bool:
+    def acknowledge(
+        self, alert_id: str, actor: str = "local-operator",
+        at: str | None = None, replay: bool = False,
+    ) -> bool:
         with self._lock:
             for alert in self._alerts:
                 if alert["id"] == alert_id:
                     if not alert["acknowledged"]:
+                        stamp = at or utc_now()
+                        if self.journal is not None and not replay:
+                            self.journal.append(
+                                "ack", {"alert_id": alert_id, "actor": actor, "at": stamp}
+                            )
                         alert["acknowledged"] = True
-                        alert["acknowledged_at"] = utc_now()
+                        alert["acknowledged_at"] = stamp
+                        alert["acknowledged_by"] = actor
                     return True
         return False
+
+    def audit_actions(self, limit: int = 50) -> list[dict]:
+        if self.journal is None:
+            return []
+        return self.journal.audit_actions(limit)
 
     def advance(self):
         """One reproducible step for TWO fictional aircraft tracks."""
         with self._lock:
             n = self._step
             self._step += 1
+            run_id = self._run_id
         # Reset simulated routes every 28 steps; no real-world coordinates.
         phase = n % 28
         paths = [
@@ -153,7 +194,7 @@ class TrackStore:
         for source, x, y, classification in paths:
             self.ingest(Observation(
                 schema_version="0.1",
-                observation_id=f"sim-{n}-{source}",
+                observation_id=f"sim-{run_id}-{n}-{source}",
                 source_id=source,
                 source_type="simulator",
                 observed_at=datetime.now(timezone.utc),
@@ -175,6 +216,7 @@ class TrackStore:
                 })
             return {
                 "mode": "simulation",
+                "persistence": self.journal is not None,
                 "notice": "DEMO ONLY — fictional positions; not an operational detector",
                 "generated_at": utc_now(),
                 "tracks": sorted(tracks, key=lambda t: t["id"]),
