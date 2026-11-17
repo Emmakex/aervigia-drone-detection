@@ -57,6 +57,7 @@ def run_test():
         registry = UserRegistry(str(folder / "users.json"))
         viewer = registry.add("qaViewer", "viewer")
         operator = registry.add("qaOperator", "operator")
+        admin = registry.add("qaAdmin", "admin")
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
@@ -120,6 +121,9 @@ def run_test():
                 assert page.locator("#authidentity").inner_text().find("qaViewer") >= 0
                 assert page.locator("#alerts button.ack, #alerts button.close-incident").count() == 0, "Viewer must not modify incidents"
                 assert page.locator("#report-tools").is_hidden(), "Bulk export is operator-only"
+                assert page.locator("#scenario-panel").is_visible()
+                assert page.locator("#scenario-actions").is_hidden()
+                assert page.locator("#scenario-select").is_disabled()
                 with page.expect_download() as single_file:
                     page.locator("#alerts button.incident-report").first.click()
                 one = single_file.value
@@ -204,6 +208,50 @@ def run_test():
                 page.screenshot(path=str(SHOTS / "aervigia-closed-history.png"), full_page=True)
                 page.locator('button.incident-filter[data-filter="open"]').click()
 
+                # Admin-only simulation scenarios with local pause/resume.
+                page.locator("#usertoken").fill(admin)
+                page.locator("#usertoken").dispatch_event("change")
+                page.wait_for_function(
+                    "document.querySelector('#authidentity').textContent.includes('qaAdmin')"
+                )
+                page.locator("#scenario-actions").wait_for(state="visible")
+                page.locator("#scenario-select").select_option("clear")
+                page.locator("#scenario-start").click()
+                page.wait_for_function(
+                    "document.querySelector('#scenario-state').textContent.includes('Sin entradas')"
+                )
+                page.wait_for_function("document.querySelector('#alerts').textContent.includes('No hay incidentes')")
+                page.locator("#scenario-pause").click()
+                page.wait_for_function("document.querySelector('#scenario-state').textContent.includes('PAUSADO')")
+                paused_step = page.locator("#stepcount").inner_text()
+                page.wait_for_timeout(2100)
+                assert page.locator("#stepcount").inner_text() == paused_step
+                page.locator("#scenario-resume").click()
+                page.wait_for_function("document.querySelector('#scenario-state').textContent.includes('EN EJECUCIÓN')")
+                page.wait_for_function(
+                    "Number(document.querySelector('#stepcount').textContent) > " + paused_step,
+                    timeout=7000,
+                )
+
+                page.locator("#scenario-select").select_option("dual-entry")
+                page.locator("#scenario-start").click()
+                page.wait_for_function(
+                    "document.querySelector('#scenario-state').textContent.includes('Entradas múltiples')"
+                )
+                page.wait_for_function(
+                    "document.querySelectorAll('#alerts section.alert').length >= 2",
+                    timeout=15000,
+                )
+                page.screenshot(path=str(SHOTS / "aervigia-scenarios.png"), full_page=True)
+
+                # Restore operator identity before logout/revocation flow.
+                page.locator("#usertoken").fill(operator)
+                page.locator("#usertoken").dispatch_event("change")
+                page.wait_for_function(
+                    "document.querySelector('#authidentity').textContent.includes('qaOperator')"
+                )
+                assert page.locator("#scenario-actions").is_hidden()
+
                 # A local logout clears operational state and the personal token.
                 page.locator("#logout").click()
                 assert page.locator("#usertoken").input_value() == ""
@@ -235,4 +283,4 @@ def run_test():
 
 if __name__ == "__main__":
     run_test()
-    print("PASS: responsive browser, reviewed/closed incident lifecycle, keyboard focus and revocation")
+    print("PASS: responsive UI, reviewed/closed incidents, role-gated scenarios, pause/resume and revocation")
