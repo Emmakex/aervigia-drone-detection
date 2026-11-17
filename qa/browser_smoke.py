@@ -199,7 +199,7 @@ def run_test():
                 with page.expect_download() as csv_download:
                     page.locator('#report-tools button[data-export="csv"]').click()
                 sheet = Path(csv_download.value.path()).read_bytes()
-                assert sheet.startswith(b"\\xef\\xbb\\xbf")
+                assert sheet.startswith(bytes([0xEF, 0xBB, 0xBF]))
                 assert b"qaOperator" in sheet
                 page.screenshot(path=str(SHOTS / "aervigia-closed-history.png"), full_page=True)
                 page.locator('button.incident-filter[data-filter="open"]').click()
