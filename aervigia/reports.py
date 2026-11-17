@@ -14,7 +14,7 @@ COLUMNS = (
     "reviewed_at", "reviewed_by", "closed_at", "closed_by", "simulation",
 )
 STATUSES = ("pending", "acknowledged", "closed")
-NOTICE = "SYNTHETIC DEMO ONLY — not evidence of real airspace events"
+NOTICE = "SIMULATED DEMO ONLY — not evidence of real airspace events"
 
 
 def incident_report(item: dict) -> dict:
