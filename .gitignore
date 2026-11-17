@@ -1,0 +1,34 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime and private observations
+data/
+logs/
+*.log
+*.sqlite3
