@@ -18,10 +18,10 @@ from urllib.request import Request, urlopen
 
 from playwright.sync_api import sync_playwright
 
-from aervigia.auth import UserRegistry
-
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from aervigia.auth import UserRegistry  # noqa: E402
 SHOTS = ROOT / "qa" / "artifacts"
 SHOTS.mkdir(parents=True, exist_ok=True)
 
