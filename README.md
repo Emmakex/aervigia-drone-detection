@@ -74,4 +74,12 @@ Technology choices remain proposals until validated in the first implementation 
 - [ ] Add zone rules, event review and incident history
 - [ ] Verify secure defaults, retention and CI
 
-**Owner:** Emmakex · **Project:** AERVIGIA
+## License and ownership
+
+Copyright (c) 2026 **Eduardo Yauri**. All rights reserved.
+
+AERVIGIA is **publicly viewable but not open-source**. Use, redistribution,
+modification or commercial deployment requires written authorization.
+See [LICENSE](LICENSE) for the full terms.
+
+**Copyright holder:** Eduardo Yauri · **GitHub account:** Emmakex · **Project:** AERVIGIA
