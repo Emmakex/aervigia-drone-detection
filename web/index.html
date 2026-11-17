@@ -422,7 +422,15 @@
       feedback("No se muestran datos hasta recuperar un acceso válido.", true);
     } finally {loading = false;}
   }
+  let lastCredentialSignature = "";
   function credentialChanged() {
+    // Browsers can fire "change" again on blur after an explicit form update.
+    // Do not invalidate a valid session unless the credential value changed.
+    const signature = JSON.stringify([
+      $("viewkey").value, $("apikey").value, $("usertoken").value
+    ]);
+    if(signature === lastCredentialSignature) return;
+    lastCredentialSignature = signature;
     authEpoch++;
     clearOperationalData();
     setText("connection", "Verificando credencial…");
@@ -434,6 +442,7 @@
   $("logout").addEventListener("click", () => {
     authEpoch++;
     $("usertoken").value = "";
+    lastCredentialSignature = "";
     access.user = null;
     access.role = "viewer";
     setText("authidentity", "Sin identificar");
