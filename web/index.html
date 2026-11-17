@@ -518,6 +518,85 @@
     });
     el.append(list);
   }
+  function updateScenarioDescription() {
+    const item = knownScenarios.find(x => x.id === $("scenario-select").value);
+    if(item) setText("scenario-description", item.description + " Resultado previsto: " + item.expected + ".");
+  }
+  async function renderScenarioState(state, headers, epoch) {
+    if(!knownScenarios.length) {
+      const response = await fetch("/api/simulation/scenarios", {headers, cache:"no-store"});
+      if(epoch !== authEpoch) return;
+      if(!response.ok) throw new Error("No se pudo cargar el catálogo de simulaciones");
+      const catalog = await response.json();
+      knownScenarios = catalog.scenarios;
+      const select = $("scenario-select");
+      select.replaceChildren();
+      knownScenarios.forEach(item => {
+        const option = node("option", item.name);
+        option.value = item.id;
+        select.append(option);
+      });
+      select.value = state.scenario_id;
+      updateScenarioDescription();
+    }
+    $("scenario-panel").hidden = false;
+    const canAdmin = access.role === "admin";
+    $("scenario-actions").hidden = !canAdmin;
+    $("scenario-select").disabled = !canAdmin || scenarioBusy;
+    const status = state.paused ? "PAUSADO" : "EN EJECUCIÓN";
+    const label = state.scenario_name + " · " + status + " · solo simulación";
+    setText("scenario-state", label);
+    $("scenario-state").className = state.paused ? "scenario-paused" : "scenario-running";
+    $("scenario-pause").hidden = state.paused;
+    $("scenario-resume").hidden = !state.paused;
+    updateScenarioDescription();
+  }
+  function scenarioAdminHeaders() {
+    if(access.role !== "admin") throw new Error("La administración requiere rol admin.");
+    if(access.mode === "named") {
+      const token = $("usertoken").value.trim();
+      if(!token) throw new Error("Introduce tu credencial personal.");
+      return {"Authorization": "Bearer " + token};
+    }
+    const token = $("apikey").value.trim();
+    if(!token) throw new Error("Introduce la clave de operador.");
+    return {"X-API-Key": token};
+  }
+  async function scenarioAction(action) {
+    if(scenarioBusy) return;
+    scenarioBusy = true;
+    const epoch = authEpoch;
+    const buttons = ["scenario-start","scenario-pause","scenario-resume"].map($);
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      const headers = scenarioAdminHeaders();
+      const id = $("scenario-select").value;
+      const suffix = action === "start"
+        ? "/scenarios/" + encodeURIComponent(id) + "/start" : "/" + action;
+      const response = await fetch("/api/simulation" + suffix, {
+        method:"POST", headers, cache:"no-store"
+      });
+      if(epoch !== authEpoch) return;
+      if(!response.ok) {
+        let message = "HTTP " + response.status;
+        try { const data = await response.json(); message = data.detail || message; }
+        catch(_error) {}
+        throw new Error(message);
+      }
+      const messages = {
+        start:"Escenario ficticio iniciado; la vista del ensayo se ha reiniciado.",
+        pause:"Simulación pausada; no se generan nuevas trayectorias.",
+        resume:"Simulación reanudada."
+      };
+      feedback(messages[action]);
+    } catch(error) {
+      if(epoch === authEpoch) feedback("No se pudo cambiar la simulación: " + String(error.message || error), true);
+    } finally {
+      scenarioBusy = false;
+      buttons.forEach(button => { button.disabled = false; });
+      if(epoch === authEpoch) refresh();
+    }
+  }
   let loading = false;
   let authEpoch = 0;
   async function refresh() {
@@ -570,6 +649,8 @@
       $("stepcount").textContent = state.step;
       setText("connection", "Simulación conectada · actualización 1,5 s");
       currentIncidents = state.alerts;
+      await renderScenarioState(state, viewHeaders, epoch);
+      if(epoch !== authEpoch) return;
       draw(state);renderTracks(state.tracks);renderAlerts(currentIncidents);renderEvents(state.events);
       const auditResponse = await fetch("/api/audit",{cache:"no-store",headers:viewHeaders});
       if(epoch !== authEpoch) return;
@@ -598,6 +679,10 @@
     setText("connection", "Verificando credencial…");
     refresh();
   }
+  $("scenario-select").addEventListener("change", updateScenarioDescription);
+  $("scenario-start").addEventListener("click", () => scenarioAction("start"));
+  $("scenario-pause").addEventListener("click", () => scenarioAction("pause"));
+  $("scenario-resume").addEventListener("click", () => scenarioAction("resume"));
   document.querySelectorAll("#report-tools [data-export]").forEach(button => {
     button.addEventListener("click", () => {
       const format = button.dataset.export;
