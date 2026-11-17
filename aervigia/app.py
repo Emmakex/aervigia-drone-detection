@@ -78,10 +78,10 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
         if registry is not None:
             try:
                 principal = registry.authenticate(authorization)
-            except (OSError, ValueError):
-                raise HTTPException(status_code=503, detail="User registry unavailable")
             except PermissionError:
                 raise HTTPException(status_code=401, detail="Personal bearer token required")
+            except (OSError, ValueError):
+                raise HTTPException(status_code=503, detail="User registry unavailable")
             allowed = {
                 "viewer": {"viewer", "operator", "admin"},
                 "operator": {"operator", "admin"},
