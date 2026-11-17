@@ -63,6 +63,18 @@
     .report-tools button:hover,.incident-report:hover{background:#23536e}
     .report-tools button:disabled,.incident-report:disabled{opacity:.6;cursor:progress}
     .report-tools .muted{line-height:1.4}
+    .scenario-panel{margin-bottom:15px}
+    .scenario-layout{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:16px 18px}
+    .scenario-field{flex:1 1 240px;min-width:0}
+    .scenario-field label{display:block;color:#b2cbe0;font-size:12px;margin-bottom:8px}
+    .scenario-field select{background:#091b2d;border:1px solid #567b99;border-radius:8px;min-height:44px;color:#edf7ff;padding:9px 12px;width:100%;font:inherit;font-size:13px}
+    .scenario-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .scenario-actions button{min-height:44px;padding:9px 13px;border:1px solid #567f97;background:#173f57;color:#e7f5ff;border-radius:8px;cursor:pointer}
+    .scenario-actions button:hover{background:#25627f}
+    .scenario-actions button:disabled{opacity:.55;cursor:not-allowed}
+    .scenario-detail{padding:0 18px 16px;color:#afc3d6;font-size:12px;line-height:1.6}
+    .scenario-running{color:#a1e7cb;font-size:12px}
+    .scenario-paused{color:#f6d18d;font-size:12px}
     .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
@@ -110,6 +122,22 @@
       <div class="stat"><span class="num" id="alertcount">—</span><span class="label">Alertas pendientes</span></div>
       <div class="stat"><span class="num" id="sourcecount">—</span><span class="label">Fuentes simuladas</span></div>
       <div class="stat"><span class="num" id="stepcount">—</span><span class="label">Pasos de simulación</span></div>
+    </section>
+    <section id="scenario-panel" class="panel scenario-panel" aria-labelledby="scenario-title" hidden>
+      <div class="heading"><h2 id="scenario-title">Laboratorio de escenarios</h2><span id="scenario-state" class="scenario-running">Simulación ficticia</span></div>
+      <div class="scenario-layout">
+        <div class="scenario-field">
+          <label for="scenario-select">Escenario de demostración</label>
+          <select id="scenario-select" aria-describedby="scenario-description"></select>
+        </div>
+        <div class="scenario-actions" id="scenario-actions" hidden>
+          <button id="scenario-start" type="button">Iniciar escenario</button>
+          <button id="scenario-pause" type="button">Pausar</button>
+          <button id="scenario-resume" type="button" hidden>Reanudar</button>
+        </div>
+      </div>
+      <div class="scenario-detail"><span id="scenario-description">Solo datos ficticios y zonas de prueba.</span>
+      <span> Cambiar de escenario reinicia la vista actual; los eventos anteriores siguen sujetos a la retención del diario local. La pausa no persiste tras reiniciar.</span></div>
     </section>
     <div class="layout">
       <div>
@@ -181,7 +209,7 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.4.0 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.5.0 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
@@ -192,6 +220,8 @@
   let alertFingerprint = null;
   let incidentFilter = "open";
   let currentIncidents = [];
+  let knownScenarios = [];
+  let scenarioBusy = false;
   function setText(id, message) {
     const element = $(id);
     if(element.textContent !== message) element.textContent = message;
@@ -205,6 +235,8 @@
     alertFingerprint = null;
     currentIncidents = [];
     $("report-tools").hidden = true;
+    $("scenario-panel").hidden = true;
+    knownScenarios = [];
     ["trackcount", "alertcount", "sourcecount", "stepcount"].forEach(id => $(id).textContent = "—");
     $("map").replaceChildren();
     $("trackrows").replaceChildren();
