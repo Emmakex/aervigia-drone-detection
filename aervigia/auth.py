@@ -47,7 +47,7 @@ class UserRegistry:
                 raise ValueError("Invalid user record")
             user, role, digest = item["id"], item["role"], item["token_hash"]
             if (not isinstance(user, str) or not USER_PATTERN.fullmatch(user)
-                    or role not in ROLES or not isinstance(digest, str)
+                    or not isinstance(role, str) or role not in ROLES or not isinstance(digest, str)
                     or not DIGEST_PATTERN.fullmatch(digest)):
                 raise ValueError("Invalid user credentials or role")
             if user in identities or digest in hashes:
