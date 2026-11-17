@@ -161,6 +161,24 @@
   const $ = id => document.getElementById(id);
   const NS = "http://www.w3.org/2000/svg";
   const access = { mode: "legacy", role: "viewer", user: null };
+  function feedback(message, isError = false) {
+    const element = $("operation-feedback");
+    element.textContent = message;
+    element.classList.toggle("error", isError);
+  }
+  function clearOperationalData() {
+    ["trackcount", "alertcount", "sourcecount", "stepcount"].forEach(id => $(id).textContent = "—");
+    $("map").replaceChildren();
+    $("trackrows").replaceChildren();
+    const row = node("tr"), cell = node("td", "Inicia sesión para consultar trayectorias.");
+    cell.colSpan = 5;
+    row.append(cell);
+    $("trackrows").append(row);
+    $("alerts").replaceChildren(node("p", "Sin datos disponibles. Comprueba el acceso.", "hint"));
+    $("alerts-label").textContent = "Acceso requerido";
+    $("audit").replaceChildren(node("p", "Auditoría no disponible.", "hint"));
+    $("events").replaceChildren(node("p", "Actividad no disponible.", "hint"));
+  }
   const bounds = {x0: 40, x1: 860, y0: 30, y1: 530};
   const coordinate = (lat, lon) => ({
     x: bounds.x0 + (lon + 0.05) / 0.1 * (bounds.x1 - bounds.x0),
@@ -228,44 +246,71 @@
       tbody.append(tr);
     }
   }
-  async function ack(id) {
+  async function ack(id, button) {
     const headers = {};
     const token = access.mode === "named"
       ? $("usertoken").value.trim() : $("apikey").value.trim();
-    if(!token) {window.alert("Introduce primero tu credencial de operador.");return;}
-    if(access.mode === "named") headers.Authorization = "Bearer "+token;
+    if(!token) {
+      feedback("Introduce primero tu credencial de operador.", true);
+      return;
+    }
+    if(access.mode === "named") headers.Authorization = "Bearer " + token;
     else headers["X-API-Key"] = token;
+    if(button) button.disabled = true;
     try {
-      const response = await fetch("/api/alerts/"+encodeURIComponent(id)+"/ack",{
-        method:"POST",headers
+      const response = await fetch("/api/alerts/" + encodeURIComponent(id) + "/ack", {
+        method: "POST", headers, cache: "no-store"
       });
       if(!response.ok) {
         const data = await response.json();
         throw new Error(data.detail || "No se pudo reconocer la alerta");
       }
+      feedback("Alerta " + id + " marcada como revisada.");
       await refresh();
-    } catch(err) {window.alert(String(err.message || err));}
+    } catch(error) {
+      feedback("No se pudo revisar la alerta: " + String(error.message || error), true);
+    } finally {
+      if(button && button.isConnected) button.disabled = false;
+    }
   }
   function renderAlerts(alerts) {
     const region = $("alerts");
+    const focused = document.activeElement;
+    const focusedId = focused && focused.dataset && focused.dataset.alertId;
     region.replaceChildren();
-    $("alerts-label").textContent = alerts.length+" eventos";
-    if(!alerts.length) {region.append(node("p","No hay entradas en la zona de prueba.","hint"));return;}
+    $("alerts-label").textContent = alerts.length + " eventos";
+    if(!alerts.length) {
+      region.append(node("p", "No hay entradas en la zona de prueba.", "hint"));
+      return;
+    }
+    let restore = null;
     alerts.forEach(alert => {
-      const section = node("div",undefined,"alert");
-      const head = node("div",undefined,"alert-head");
-      head.append(node("strong",alert.title,"alert-title"));
-      head.append(node("span",alert.acknowledged?"REVISADA":"PENDIENTE",alert.acknowledged?"chip ok":"chip"));
+      const section = node("section", undefined, "alert");
+      section.dataset.alertId = alert.id;
+      section.tabIndex = -1;
+      section.setAttribute("aria-label", "Incidente " + alert.id);
+      const head = node("div", undefined, "alert-head");
+      head.append(node("strong", alert.title, "alert-title"));
+      head.append(node("span", alert.acknowledged ? "REVISADA" : "PENDIENTE", alert.acknowledged ? "chip ok" : "chip"));
       section.append(head);
-      section.append(node("div",alert.track_id+" · "+fmtTime(alert.at),"alert-meta"));
-      if(!alert.acknowledged && (access.mode !== "named" || ["operator","admin"].includes(access.role))) {
-        const btn = node("button","Marcar como revisada","ack");
-        btn.type="button";
-        btn.addEventListener("click",()=>ack(alert.id));
-        section.append(btn);
+      section.append(node("div", alert.track_id + " · " + fmtTime(alert.at), "alert-meta"));
+      if(alert.acknowledged && alert.acknowledged_by) {
+        section.append(node("div", "Revisada por " + alert.acknowledged_by, "alert-meta"));
       }
+      if(!alert.acknowledged &&
+         (access.mode !== "named" || ["operator", "admin"].includes(access.role))) {
+        const btn = node("button", "Marcar como revisada", "ack");
+        btn.type = "button";
+        btn.dataset.alertId = alert.id;
+        btn.setAttribute("aria-label", "Marcar como revisada la alerta " + alert.id);
+        btn.addEventListener("click", () => ack(alert.id, btn));
+        section.append(btn);
+        if(focusedId === alert.id) restore = btn;
+      }
+      if(focusedId === alert.id && !restore) restore = section;
       region.append(section);
     });
+    if(restore) restore.focus({preventScroll: true});
   }
   function renderAudit(actions, persistence) {
     const el = $("audit");
@@ -339,8 +384,11 @@
         const auditData = await auditResponse.json();
         renderAudit(auditData.actions, auditData.persistence);
       }
-    } catch(error) {$("connection").textContent = "Error de conexión: "+String(error.message || error);}
-    finally {loading = false;}
+    } catch(error) {
+      $("connection").textContent = "Error de conexión: " + String(error.message || error);
+      clearOperationalData();
+      feedback("No se muestran datos hasta recuperar un acceso válido.", true);
+    } finally {loading = false;}
   }
   $("viewkey").addEventListener("change",refresh);
   $("apikey").addEventListener("change",refresh);
@@ -358,7 +406,8 @@
       return;
     }
     await refresh();
-    window.setInterval(refresh,1500);
+    window.setInterval(() => { if(!document.hidden) refresh(); }, 1500);
+    document.addEventListener("visibilitychange", () => { if(!document.hidden) refresh(); });
   }
   initialize();
 })();
