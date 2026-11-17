@@ -26,12 +26,42 @@ class SQLiteEventJournal:
             self._conn.execute("""
                 CREATE TABLE IF NOT EXISTS journal_events (
                     seq INTEGER PRIMARY KEY AUTOINCREMENT,
-                    kind TEXT NOT NULL CHECK(kind IN ('observation', 'ack', 'reset')),
+                    kind TEXT NOT NULL CHECK(kind IN ('observation', 'ack', 'reset', 'close')),
                     recorded_at TEXT NOT NULL,
                     event_id TEXT UNIQUE,
                     payload TEXT NOT NULL
                 )
             """)
+            # Databases created by v0.2 have a CHECK without 'close'.
+            # A small transactional table rewrite preserves all existing sequence IDs.
+            ddl = self._conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' "
+                "AND name='journal_events'"
+            ).fetchone()[0]
+            if "'close'" not in ddl:
+                try:
+                    self._conn.execute("BEGIN IMMEDIATE")
+                    self._conn.execute("""
+                        CREATE TABLE journal_events_v03 (
+                            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                            kind TEXT NOT NULL CHECK(kind IN ('observation', 'ack', 'reset', 'close')),
+                            recorded_at TEXT NOT NULL,
+                            event_id TEXT UNIQUE,
+                            payload TEXT NOT NULL
+                        )
+                    """)
+                    self._conn.execute(
+                        "INSERT INTO journal_events_v03(seq,kind,recorded_at,event_id,payload) "
+                        "SELECT seq,kind,recorded_at,event_id,payload FROM journal_events"
+                    )
+                    self._conn.execute("DROP TABLE journal_events")
+                    self._conn.execute(
+                        "ALTER TABLE journal_events_v03 RENAME TO journal_events"
+                    )
+                    self._conn.commit()
+                except Exception:
+                    self._conn.rollback()
+                    raise
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS journal_events_recorded_at_idx "
                 "ON journal_events(recorded_at)"
@@ -50,7 +80,7 @@ class SQLiteEventJournal:
             return cursor.rowcount
 
     def append(self, kind: str, payload: dict, event_id: str | None = None) -> bool:
-        if kind not in {"observation", "ack", "reset"}:
+        if kind not in {"observation", "ack", "reset", "close"}:
             raise ValueError("Unsupported journal event")
         if kind == "observation" and not event_id:
             raise ValueError("Observation requires event_id")
@@ -90,7 +120,7 @@ class SQLiteEventJournal:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT kind,recorded_at,payload FROM journal_events "
-                "WHERE kind IN ('ack','reset') ORDER BY seq DESC LIMIT ?",
+                "WHERE kind IN ('ack','reset','close') ORDER BY seq DESC LIMIT ?",
                 (min(max(1, limit), 100),),
             ).fetchall()
         return [
