@@ -17,5 +17,9 @@ jobs:
           cache: pip
       - name: Install requirements
         run: python -m pip install -r requirements-dev.txt
+      - name: Validate dashboard JavaScript syntax
+        run: |
+          python -c "from pathlib import Path; s = Path('web/index.html').read_text(); Path('/tmp/aervigia-inline.js').write_text(s.split('<script>', 1)[1].split('</script>', 1)[0])"
+          node --check /tmp/aervigia-inline.js
       - name: Run automated tests
         run: python -m pytest -q
