@@ -135,7 +135,10 @@ def run_test():
                 pending.wait_for(state="visible")
                 focus_id = pending.get_attribute("data-alert-id")
                 pending.focus()
-                # Trigger an automatic redraw while the keyboard is on the action.
+                assert page.evaluate(
+                    "() => document.activeElement?.dataset?.alertId"
+                ) == focus_id, "A focused incident action must receive keyboard focus"
+                # Trigger repeated polling with unchanged alerts; focus must remain stable.
                 page.wait_for_timeout(1950)
                 current_focus = page.evaluate("""() => ({
                   id: document.activeElement?.dataset?.alertId || null,
