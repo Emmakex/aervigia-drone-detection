@@ -137,9 +137,18 @@ def run_test():
                 pending.focus()
                 # Trigger an automatic redraw while the keyboard is on the action.
                 page.wait_for_timeout(1950)
-                assert page.evaluate(
-                    "() => document.activeElement?.dataset?.alertId"
-                ) == focus_id, "Live refresh must preserve keyboard focus"
+                current_focus = page.evaluate("""() => ({
+                  id: document.activeElement?.dataset?.alertId || null,
+                  tag: document.activeElement?.tagName || null,
+                  className: document.activeElement?.className || null,
+                  present: [...document.querySelectorAll('button[data-alert-id]')]
+                    .map(b => b.dataset.alertId)
+                })""")
+                if current_focus["id"] != focus_id:
+                    page.screenshot(path=str(SHOTS / "aervigia-focus-debug.png"), full_page=True)
+                    raise AssertionError(
+                        f"Live refresh lost focus: expected {focus_id}, got {current_focus}"
+                    )
                 page.locator(f'button[data-alert-id="{focus_id}"]').click()
                 page.locator("#operation-feedback").get_by_text("marcada como revisada").wait_for()
                 page.wait_for_function(
