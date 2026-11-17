@@ -62,3 +62,30 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${VIEWER_TOKEN}" http://127.0.0.1:18001/api/simulation/reset)" = "403"
           docker exec aervigia-named-ci python -m aervigia.auth --file /app/data/users.json revoke --user ciViewer
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${VIEWER_TOKEN}" http://127.0.0.1:18001/api/state)" = "401"
+
+  browser:
+    name: Chromium UX smoke test (PR only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install backend and Playwright
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pip install "playwright>=1.50,<2"
+          python -m playwright install --with-deps chromium
+      - name: Exercise simulated operator dashboard in Chromium
+        run: python qa/browser_smoke.py
+      - name: Keep browser screenshots for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aervigia-browser-qa
+          path: qa/artifacts/*.png
+          if-no-files-found: ignore
+          retention-days: 3
