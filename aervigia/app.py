@@ -15,6 +15,7 @@ from aervigia import __version__
 from aervigia.auth import Identity, UserRegistry
 from aervigia.core import Observation, TrackStore
 from aervigia.reports import collection_report, csv_report, incident_report
+from aervigia.scenarios import SCENARIOS, catalog
 from aervigia.storage import SQLiteEventJournal
 from typing import Literal
 
@@ -250,6 +251,49 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
         if result == "not_reviewed":
             raise HTTPException(status_code=409, detail="Review incident before closure")
         return {"id": alert_id, "status": "closed", "already_closed": result == "already_closed"}
+
+    @application.get("/api/simulation/scenarios")
+    async def available_scenarios(
+        authorization: str | None = Header(default=None),
+        x_view_key: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        authorize("viewer", authorization, x_view_key, x_api_key)
+        return {"simulation": True, "scenarios": catalog()}
+
+    @application.post("/api/simulation/scenarios/{scenario_id}/start")
+    async def start_scenario(
+        scenario_id: str,
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        principal = authorize("admin", authorization, write_candidate=x_api_key)
+        if scenario_id not in SCENARIOS:
+            raise HTTPException(status_code=404, detail="Unknown synthetic scenario")
+        store.reset(actor=principal.user_id, scenario_id=scenario_id)
+        store.advance()
+        return {
+            "simulation": True,
+            "scenario_id": scenario_id,
+            "paused": False,
+            "step": store.snapshot()["step"],
+        }
+
+    @application.post("/api/simulation/pause")
+    async def pause_scenario(
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        authorize("admin", authorization, write_candidate=x_api_key)
+        return {"simulation": True, "paused": store.set_paused(True)}
+
+    @application.post("/api/simulation/resume")
+    async def resume_scenario(
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        authorize("admin", authorization, write_candidate=x_api_key)
+        return {"simulation": True, "paused": store.set_paused(False)}
 
     @application.post("/api/simulation/reset")
     async def reset_simulation(
