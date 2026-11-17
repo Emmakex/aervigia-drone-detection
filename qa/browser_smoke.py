@@ -135,9 +135,20 @@ def run_test():
                 pending.wait_for(state="visible")
                 focus_id = pending.get_attribute("data-alert-id")
                 pending.focus()
-                assert page.evaluate(
-                    "() => document.activeElement?.dataset?.alertId"
-                ) == focus_id, "A focused incident action must receive keyboard focus"
+                focus_details = page.evaluate("""id => ({
+                    activeId: document.activeElement?.dataset?.alertId || null,
+                    activeTag: document.activeElement?.tagName || null,
+                    hasFocus: document.hasFocus(),
+                    candidate: [...document.querySelectorAll('button[data-alert-id]')]
+                      .filter(x => x.dataset.alertId === id)
+                      .map(x => ({connected: x.isConnected, disabled: x.disabled,
+                                  visible: x.getBoundingClientRect().width > 0,
+                                  text: x.textContent}))
+                })""", focus_id)
+                if focus_details["activeId"] != focus_id:
+                    raise AssertionError(
+                        f"Focused incident action not retained: expected {focus_id}, got {focus_details}"
+                    )
                 # Trigger repeated polling with unchanged alerts; focus must remain stable.
                 page.wait_for_timeout(1950)
                 current_focus = page.evaluate("""() => ({
