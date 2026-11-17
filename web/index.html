@@ -51,6 +51,13 @@
     .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
     .ack:hover{background:#225375}
     .ack:disabled{opacity:.6;cursor:progress}
+    .close-incident{border:1px solid #537c8b;background:#1c3946;color:#d1f4f3;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
+    .close-incident:hover{background:#244b5d}
+    .close-incident:disabled{opacity:.6;cursor:progress}
+    .incident-filters{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:11px 16px;border-bottom:1px solid #253e55}
+    .incident-filter{border:1px solid #365774;background:#122a3c;color:#c7dfef;min-height:38px;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12px}
+    .incident-filter[aria-pressed="true"]{background:#286487;border-color:#76d5f3;color:#fff;font-weight:700}
+    .incident-reference{font-weight:700;color:#b4e5fa;letter-spacing:.03em}
     .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
@@ -124,7 +131,14 @@
       </div>
       <aside class="right" aria-label="Alertas y configuración">
         <section class="panel" aria-labelledby="alert-title">
-          <div class="heading"><h2 id="alert-title">Revisión de incidentes</h2><span class="muted" id="alerts-label">0 eventos</span></div>
+          <div class="heading"><h2 id="alert-title">Gestión de incidentes</h2><span class="muted" id="alerts-label">0 eventos</span></div>
+          <div class="incident-filters" role="group" aria-label="Filtrar incidentes por estado">
+            <button type="button" class="incident-filter" data-filter="open" aria-pressed="true">Abiertos</button>
+            <button type="button" class="incident-filter" data-filter="pending" aria-pressed="false">Pendientes</button>
+            <button type="button" class="incident-filter" data-filter="acknowledged" aria-pressed="false">Revisados</button>
+            <button type="button" class="incident-filter" data-filter="closed" aria-pressed="false">Cerrados</button>
+            <button type="button" class="incident-filter" data-filter="all" aria-pressed="false">Todos</button>
+          </div>
           <div id="alerts" class="alerts"><p class="hint">Esperando datos simulados…</p></div>
         </section>
         <section class="panel" aria-labelledby="settings-title">
@@ -157,7 +171,7 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.2.1 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.3.0 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
@@ -166,6 +180,8 @@
   const NS = "http://www.w3.org/2000/svg";
   const access = { mode: "legacy", role: "viewer", user: null };
   let alertFingerprint = null;
+  let incidentFilter = "open";
+  let currentIncidents = [];
   function setText(id, message) {
     const element = $(id);
     if(element.textContent !== message) element.textContent = message;
@@ -177,6 +193,7 @@
   }
   function clearOperationalData() {
     alertFingerprint = null;
+    currentIncidents = [];
     ["trackcount", "alertcount", "sourcecount", "stepcount"].forEach(id => $(id).textContent = "—");
     $("map").replaceChildren();
     $("trackrows").replaceChildren();
@@ -256,7 +273,7 @@
       tbody.append(tr);
     }
   }
-  async function ack(id, button) {
+  async function transitionIncident(id, action, button) {
     const headers = {};
     const token = access.mode === "named"
       ? $("usertoken").value.trim() : $("apikey").value.trim();
@@ -267,27 +284,38 @@
     if(access.mode === "named") headers.Authorization = "Bearer " + token;
     else headers["X-API-Key"] = token;
     if(button) button.disabled = true;
+    const endpoint = action === "close"
+      ? "/api/incidents/" + encodeURIComponent(id) + "/close"
+      : "/api/alerts/" + encodeURIComponent(id) + "/ack";
     try {
-      const response = await fetch("/api/alerts/" + encodeURIComponent(id) + "/ack", {
+      const response = await fetch(endpoint, {
         method: "POST", headers, cache: "no-store"
       });
       if(!response.ok) {
         const data = await response.json();
-        throw new Error(data.detail || "No se pudo reconocer la alerta");
+        throw new Error(data.detail || "No se pudo actualizar el incidente");
       }
-      feedback("Alerta " + id + " marcada como revisada.");
+      feedback(action === "close"
+        ? "Incidente cerrado y conservado en el historial reciente."
+        : "Incidente marcado como revisado.");
       await refresh();
     } catch(error) {
-      feedback("No se pudo revisar la alerta: " + String(error.message || error), true);
+      feedback("No se pudo actualizar el incidente: " + String(error.message || error), true);
     } finally {
       if(button && button.isConnected) button.disabled = false;
     }
   }
   function renderAlerts(alerts) {
-    // Avoid rebuilding focusable buttons when only the map positions change.
+    const shown = alerts.filter(alert => {
+      const status = alert.status || (alert.acknowledged ? "acknowledged" : "pending");
+      return incidentFilter === "all"
+        || (incidentFilter === "open" && status !== "closed")
+        || incidentFilter === status;
+    });
+    // Preserve buttons and keyboard focus across unrelated position updates.
     const fingerprint = JSON.stringify([
-      access.mode, access.role,
-      alerts.map(a => [a.id, a.acknowledged, a.acknowledged_by || ""])
+      access.mode, access.role, incidentFilter,
+      shown.map(a => [a.id, a.reference, a.status, a.acknowledged_by || "", a.closed_by || ""])
     ]);
     if(alertFingerprint === fingerprint) return;
     alertFingerprint = fingerprint;
@@ -295,39 +323,65 @@
     const focused = document.activeElement;
     const focusedId = focused && focused.dataset && focused.dataset.alertId;
     region.replaceChildren();
-    $("alerts-label").textContent = alerts.length + " eventos";
-    if(!alerts.length) {
-      region.append(node("p", "No hay entradas en la zona de prueba.", "hint"));
+    $("alerts-label").textContent = shown.length + " de " + alerts.length;
+    if(!shown.length) {
+      region.append(node("p", "No hay incidentes en este estado.", "hint"));
+      if(focusedId) {
+        const selected = document.querySelector('.incident-filter[aria-pressed="true"]');
+        if(selected) selected.focus({preventScroll:true});
+      }
       return;
     }
     let restore = null;
-    alerts.forEach(alert => {
+    shown.forEach(alert => {
+      const status = alert.status || (alert.acknowledged ? "acknowledged" : "pending");
+      const ref = alert.reference || alert.id;
       const section = node("section", undefined, "alert");
       section.dataset.alertId = alert.id;
       section.tabIndex = -1;
-      section.setAttribute("aria-label", "Incidente " + alert.id);
+      section.setAttribute("aria-label", "Incidente " + ref);
       const head = node("div", undefined, "alert-head");
-      head.append(node("strong", alert.title, "alert-title"));
-      head.append(node("span", alert.acknowledged ? "REVISADA" : "PENDIENTE", alert.acknowledged ? "chip ok" : "chip"));
+      head.append(node("strong", ref, "incident-reference"));
+      const label = status === "closed" ? "CERRADO"
+        : status === "acknowledged" ? "REVISADO" : "PENDIENTE";
+      head.append(node("span", label, status === "pending" ? "chip" : "chip ok"));
       section.append(head);
-      section.append(node("div", alert.track_id + " · " + fmtTime(alert.at), "alert-meta"));
-      if(alert.acknowledged && alert.acknowledged_by) {
-        section.append(node("div", "Revisada por " + alert.acknowledged_by, "alert-meta"));
+      section.append(node("div", alert.title + " · " + alert.track_id + " · " +
+        fmtTime(alert.at), "alert-meta"));
+      if(alert.acknowledged_by) {
+        section.append(node("div", "Revisado por " + alert.acknowledged_by +
+          " · " + fmtTime(alert.acknowledged_at), "alert-meta"));
       }
-      if(!alert.acknowledged &&
-         (access.mode !== "named" || ["operator", "admin"].includes(access.role))) {
-        const btn = node("button", "Marcar como revisada", "ack");
+      if(alert.closed_by) {
+        section.append(node("div", "Cerrado por " + alert.closed_by +
+          " · " + fmtTime(alert.closed_at), "alert-meta"));
+      }
+      const canWrite = access.mode !== "named" || ["operator", "admin"].includes(access.role);
+      if(status === "pending" && canWrite) {
+        const btn = node("button", "Marcar como revisado", "ack");
         btn.type = "button";
         btn.dataset.alertId = alert.id;
-        btn.setAttribute("aria-label", "Marcar como revisada la alerta " + alert.id);
-        btn.addEventListener("click", () => ack(alert.id, btn));
+        btn.setAttribute("aria-label", "Revisar incidente " + ref);
+        btn.addEventListener("click", () => transitionIncident(alert.id, "ack", btn));
+        section.append(btn);
+        if(focusedId === alert.id) restore = btn;
+      } else if(status === "acknowledged" && canWrite) {
+        const btn = node("button", "Cerrar incidente", "close-incident");
+        btn.type = "button";
+        btn.dataset.alertId = alert.id;
+        btn.setAttribute("aria-label", "Cerrar incidente revisado " + ref);
+        btn.addEventListener("click", () => transitionIncident(alert.id, "close", btn));
         section.append(btn);
         if(focusedId === alert.id) restore = btn;
       }
       if(focusedId === alert.id && !restore) restore = section;
       region.append(section);
     });
-    if(restore) restore.focus({preventScroll: true});
+    if(restore) restore.focus({preventScroll:true});
+    else if(focusedId) {
+      const selected = document.querySelector('.incident-filter[aria-pressed="true"]');
+      if(selected) selected.focus({preventScroll:true});
+    }
   }
   function renderAudit(actions, persistence) {
     const el = $("audit");
@@ -344,7 +398,8 @@
     list.style.cssText="padding:0 17px 6px 30px;font-size:12px;color:#a9bdd1;line-height:1.9";
     actions.slice(0,6).forEach(action => {
       const who = action.details.actor || "operador";
-      const what = action.action === "ack" ? "Alerta revisada" : "Simulación reiniciada";
+      const what = action.action === "ack" ? "Incidente revisado"
+        : action.action === "close" ? "Incidente cerrado" : "Simulación reiniciada";
       list.append(node("li",fmtTime(action.recorded_at)+" · "+what+" · "+who));
     });
     el.append(list);
@@ -356,7 +411,9 @@
     const list = node("ul");
     list.style.cssText="padding:0 17px 6px 30px;font-size:12px;color:#a9bdd1;line-height:1.9";
     events.slice(0,6).forEach(e => {
-      const li = node("li",fmtTime(e.at)+" · "+e.track_id+" · "+(e.type==="zone-entry"?"Entrada de zona":"Nueva trayectoria"));
+      const kind = e.type === "zone-entry" ? "Entrada en zona"
+        : e.type === "incident-closed" ? "Incidente cerrado" : "Nueva trayectoria";
+      const li = node("li", fmtTime(e.at) + " · " + e.track_id + " · " + kind);
       list.append(li);
     });
     el.append(list);
@@ -408,7 +465,8 @@
       $("sourcecount").textContent = new Set(state.tracks.map(t=>t.source_id)).size;
       $("stepcount").textContent = state.step;
       setText("connection", "Simulación conectada · actualización 1,5 s");
-      draw(state);renderTracks(state.tracks);renderAlerts(state.alerts);renderEvents(state.events);
+      currentIncidents = state.alerts;
+      draw(state);renderTracks(state.tracks);renderAlerts(currentIncidents);renderEvents(state.events);
       const auditResponse = await fetch("/api/audit",{cache:"no-store",headers:viewHeaders});
       if(epoch !== authEpoch) return;
       if(auditResponse.ok){
@@ -436,6 +494,16 @@
     setText("connection", "Verificando credencial…");
     refresh();
   }
+  document.querySelectorAll(".incident-filter").forEach(button => {
+    button.addEventListener("click", () => {
+      incidentFilter = button.dataset.filter;
+      document.querySelectorAll(".incident-filter").forEach(item => {
+        item.setAttribute("aria-pressed", String(item === button));
+      });
+      alertFingerprint = null;
+      renderAlerts(currentIncidents);
+    });
+  });
   $("viewkey").addEventListener("change", credentialChanged);
   $("apikey").addEventListener("change", credentialChanged);
   $("usertoken").addEventListener("change", credentialChanged);

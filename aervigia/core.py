@@ -2,6 +2,7 @@
 
 from collections import deque
 from datetime import datetime, timezone
+from hashlib import sha256
 from math import sin
 from threading import RLock
 from uuid import uuid4
@@ -74,6 +75,16 @@ class TrackStore:
                         payload["alert_id"], actor=payload["actor"],
                         at=payload["at"], replay=True
                     )
+                elif kind == "close":
+                    self.close_incident(
+                        payload["alert_id"], actor=payload["actor"],
+                        at=payload["at"], replay=True
+                    )
+                elif kind == "close":
+                    self.close_incident(
+                        payload["alert_id"], actor=payload["actor"],
+                        at=payload["at"], replay=True
+                    )
                 elif kind == "reset":
                     self.reset(replay=True)
 
@@ -140,12 +151,18 @@ class TrackStore:
                 self._alert_seq += 1
                 alert = {
                     "id": f"SIM-ALERT-{self._alert_seq:04d}",
+                    # Public reference is unique across simulation resets and replays.
+                    "reference": "INC-" + sha256(
+                        observation.observation_id.encode("utf-8")
+                    ).hexdigest()[:12].upper(),
                     "type": "zone-entry",
                     "title": "Entrada en zona simulada",
                     "track_id": tid,
                     "zone_id": ZONE["id"],
                     "at": now,
                     "acknowledged": False,
+                    "closed": False,
+                    "status": "pending",
                     "simulation": True,
                 }
                 self._alerts.insert(0, alert)
@@ -171,8 +188,45 @@ class TrackStore:
                         alert["acknowledged"] = True
                         alert["acknowledged_at"] = stamp
                         alert["acknowledged_by"] = actor
+                        alert["status"] = "acknowledged"
                     return True
         return False
+
+    def close_incident(
+        self, alert_id: str, actor: str = "local-operator",
+        at: str | None = None, replay: bool = False,
+    ) -> str:
+        """Archive a reviewed simulated incident without deleting the evidence.
+
+        Returns a machine-readable outcome, suitable for HTTP 404/409 mapping.
+        """
+        with self._lock:
+            for alert in self._alerts:
+                if alert["id"] != alert_id:
+                    continue
+                if alert["closed"]:
+                    return "already_closed"
+                if not alert["acknowledged"]:
+                    return "not_reviewed"
+                stamp = at or utc_now()
+                if self.journal is not None and not replay:
+                    self.journal.append(
+                        "close", {
+                            "alert_id": alert_id,
+                            "reference": alert["reference"],
+                            "actor": actor, "at": stamp,
+                        }
+                    )
+                alert["closed"] = True
+                alert["status"] = "closed"
+                alert["closed_at"] = stamp
+                alert["closed_by"] = actor
+                self._events.appendleft({
+                    "type": "incident-closed", "track_id": alert["track_id"],
+                    "reference": alert["reference"], "at": stamp,
+                })
+                return "closed"
+        return "not_found"
 
     def maintain(self) -> int:
         """Enforce retention during runtime and evict expired in-memory events.
@@ -249,7 +303,7 @@ class TrackStore:
                 "generated_at": utc_now(),
                 "tracks": sorted(tracks, key=lambda t: t["id"]),
                 "zones": [dict(ZONE)],
-                "alerts": [dict(a) for a in self._alerts[:25]],
+                "alerts": [dict(a) for a in self._alerts[:80]],
                 "events": [dict(e) for e in list(self._events)[:25]],
                 "step": self._step,
             }

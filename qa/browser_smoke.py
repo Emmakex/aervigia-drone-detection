@@ -164,12 +164,24 @@ def run_test():
                         f"Live refresh lost focus: expected {focus_id}, got {current_focus}"
                     )
                 page.locator(f'button[data-alert-id="{focus_id}"]').click()
-                page.locator("#operation-feedback").get_by_text("marcada como revisada").wait_for()
+                page.locator("#operation-feedback").get_by_text("marcado como revisado").wait_for()
                 page.wait_for_function(
-                    "document.querySelector('#alerts').textContent.includes('REVISADA')"
+                    "document.querySelector('#alerts').textContent.includes('REVISADO')"
                 )
                 assert "qaOperator" in page.locator("#audit").inner_text()
                 page.screenshot(path=str(SHOTS / "aervigia-reviewed.png"), full_page=True)
+
+                # Complete the human workflow: reviewed → closed → history.
+                page.locator(f'button.close-incident[data-alert-id="{focus_id}"]').click()
+                page.locator("#operation-feedback").get_by_text("Incidente cerrado").wait_for()
+                page.locator('button.incident-filter[data-filter="closed"]').click()
+                page.wait_for_function(
+                    "document.querySelector('#alerts').textContent.includes('CERRADO')"
+                )
+                assert "qaOperator" in page.locator("#alerts").inner_text()
+                assert "Incidente cerrado" in page.locator("#audit").inner_text()
+                page.screenshot(path=str(SHOTS / "aervigia-closed-history.png"), full_page=True)
+                page.locator('button.incident-filter[data-filter="open"]').click()
 
                 # A local logout clears operational state and the personal token.
                 page.locator("#logout").click()
@@ -202,4 +214,4 @@ def run_test():
 
 if __name__ == "__main__":
     run_test()
-    print("PASS: browser desktop/mobile layout, viewer/operator alert flow and access revocation")
+    print("PASS: responsive browser, reviewed/closed incident lifecycle, keyboard focus and revocation")

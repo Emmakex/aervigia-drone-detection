@@ -180,6 +180,20 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
             raise HTTPException(status_code=404, detail="Alert not found")
         return {"id": alert_id, "acknowledged": True}
 
+    @application.post("/api/incidents/{alert_id}/close")
+    async def close_incident(
+        alert_id: str,
+        x_api_key: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+    ):
+        principal = authorize("operator", authorization, write_candidate=x_api_key)
+        result = store.close_incident(alert_id, actor=principal.user_id)
+        if result == "not_found":
+            raise HTTPException(status_code=404, detail="Incident not found")
+        if result == "not_reviewed":
+            raise HTTPException(status_code=409, detail="Review incident before closure")
+        return {"id": alert_id, "status": "closed", "already_closed": result == "already_closed"}
+
     @application.post("/api/simulation/reset")
     async def reset_simulation(
         x_api_key: str | None = Header(default=None),
