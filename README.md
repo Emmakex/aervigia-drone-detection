@@ -4,7 +4,7 @@
 
 AERVIGIA is an independent, hardware-agnostic software platform for **passive drone awareness, low-altitude airspace monitoring and incident management**. Its first release focuses on combining observations from authorized sources into a clear operational picture for human operators.
 
-> **Status:** v0.2.1 local development prototype. Simulated observations only; there is no live drone detection.
+> **Status:** v0.3.0 local development prototype. Simulated observations only; there is no live drone detection.
 
 ## Quick start (local demo)
 
@@ -23,12 +23,13 @@ provides a local persistent SQLite journal with hourly retention sweeps.
 See [local run guide](docs/RUN.md) for account provisioning and revocation.
 **Do not expose this demo to the public Internet.**
 
-## Current implementation (v0.2.1)
+## Current implementation (v0.3.0)
 
 - Python/FastAPI and Pydantic-validated synthetic observation API.
 - Self-contained responsive HTML/CSS/JavaScript dashboard with synthetic tracks.
 - Two deterministic simulator sources and a fictional protected zone.
-- Zone-entry alerts, operator acknowledgments with write token and timeline.
+- Simulated incidents with pending → reviewed → closed workflow, unique public reference, filters and event history.
+- Only reviewed incidents may be closed; authorized operator identities are recorded.
 - Optional persistent SQLite event journal with replay and startup retention (1–30 days).
 - Optional named viewer/operator/admin accounts with revocable personal bearer tokens and per-user audit attribution.
 - Legacy local shared keys remain available only when the named-user registry is disabled.
@@ -104,8 +105,10 @@ The first prototype is deliberately minimal to validate UX and event handling be
 - [x] Validate automated tests and JavaScript syntax in CI
 - [x] Add SQLite journal, restart replay and startup plus continuous retention
 - [x] Add local viewer/operator keys and an audit endpoint for operator actions
-- [ ] Verify the visual dashboard manually and improve accessibility
+- [x] Validate responsive layout and keyboard alert actions with Chromium browser tests
+- [ ] Review the final visual design manually (screenshots generated in PR CI)
 - [x] Add named-account roles, revocable personal tokens and runtime retention sweeps
+- [x] Add pending/reviewed/closed incident workflow and recent-history filter
 - [ ] Add external identity integration, session expiry, MFA and production-grade security
 - [ ] Evaluate multi-sensor integrations after safety and legal review
 
