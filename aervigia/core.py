@@ -80,11 +80,6 @@ class TrackStore:
                         payload["alert_id"], actor=payload["actor"],
                         at=payload["at"], replay=True
                     )
-                elif kind == "close":
-                    self.close_incident(
-                        payload["alert_id"], actor=payload["actor"],
-                        at=payload["at"], replay=True
-                    )
                 elif kind == "reset":
                     self.reset(replay=True)
 
@@ -249,6 +244,11 @@ class TrackStore:
                     self.acknowledge(
                         payload["alert_id"], actor=payload["actor"],
                         at=payload["at"], replay=True,
+                    )
+                elif kind == "close":
+                    self.close_incident(
+                        payload["alert_id"], actor=payload["actor"],
+                        at=payload["at"], replay=True
                     )
                 elif kind == "reset":
                     self.reset(replay=True)
