@@ -51,6 +51,13 @@
     .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
     .ack:hover{background:#225375}
     .ack:disabled{opacity:.6;cursor:progress}
+    .close-incident{border:1px solid #537c8b;background:#1c3946;color:#d1f4f3;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
+    .close-incident:hover{background:#244b5d}
+    .close-incident:disabled{opacity:.6;cursor:progress}
+    .incident-filters{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:11px 16px;border-bottom:1px solid #253e55}
+    .incident-filter{border:1px solid #365774;background:#122a3c;color:#c7dfef;min-height:38px;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12px}
+    .incident-filter[aria-pressed="true"]{background:#286487;border-color:#76d5f3;color:#fff;font-weight:700}
+    .incident-reference{font-weight:700;color:#b4e5fa;letter-spacing:.03em}
     .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
@@ -124,7 +131,14 @@
       </div>
       <aside class="right" aria-label="Alertas y configuración">
         <section class="panel" aria-labelledby="alert-title">
-          <div class="heading"><h2 id="alert-title">Revisión de incidentes</h2><span class="muted" id="alerts-label">0 eventos</span></div>
+          <div class="heading"><h2 id="alert-title">Gestión de incidentes</h2><span class="muted" id="alerts-label">0 eventos</span></div>
+          <div class="incident-filters" role="group" aria-label="Filtrar incidentes por estado">
+            <button type="button" class="incident-filter" data-filter="open" aria-pressed="true">Abiertos</button>
+            <button type="button" class="incident-filter" data-filter="pending" aria-pressed="false">Pendientes</button>
+            <button type="button" class="incident-filter" data-filter="acknowledged" aria-pressed="false">Revisados</button>
+            <button type="button" class="incident-filter" data-filter="closed" aria-pressed="false">Cerrados</button>
+            <button type="button" class="incident-filter" data-filter="all" aria-pressed="false">Todos</button>
+          </div>
           <div id="alerts" class="alerts"><p class="hint">Esperando datos simulados…</p></div>
         </section>
         <section class="panel" aria-labelledby="settings-title">
@@ -157,7 +171,7 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.2.1 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.3.0 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
@@ -166,6 +180,8 @@
   const NS = "http://www.w3.org/2000/svg";
   const access = { mode: "legacy", role: "viewer", user: null };
   let alertFingerprint = null;
+  let incidentFilter = "open";
+  let currentIncidents = [];
   function setText(id, message) {
     const element = $(id);
     if(element.textContent !== message) element.textContent = message;
