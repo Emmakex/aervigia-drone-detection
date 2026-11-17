@@ -4,7 +4,30 @@
 
 AERVIGIA is an independent, hardware-agnostic software platform for **passive drone awareness, low-altitude airspace monitoring and incident management**. Its first release focuses on combining observations from authorized sources into a clear operational picture for human operators.
 
-> **Status:** Project initialization / MVP planning. This repository does not yet contain a working detection system.
+> **Status:** v0.1 simulation-first prototype. The API and dashboard process fictional observations only; there is no live drone detection.
+
+## Quick start (local demo)
+
+- Python 3.12+.
+- Install dependencies: `python -m pip install -r requirements-dev.txt`.
+- Run tests: `python -m pytest -q`.
+- Start: `uvicorn aervigia.app:app --host 127.0.0.1 --port 8000`.
+- Open: http://127.0.0.1:8000. API schema: http://127.0.0.1:8000/docs.
+
+Or use `docker compose up --build`. See [local run guide](docs/RUN.md) for details.
+
+No token is necessary to view the fictional simulation. The API is read-only
+unless `AERVIGIA_API_TOKEN` is explicitly configured; **do not expose this demo
+to the public Internet**.
+
+## Current implementation (v0.1)
+
+- Python/FastAPI and Pydantic-validated synthetic observation API.
+- Self-contained responsive HTML/CSS/JavaScript dashboard with synthetic tracks.
+- Two deterministic simulator sources and a fictional protected zone.
+- Zone-entry alerts, operator acknowledgments with write token and timeline.
+- In-memory storage only; no multi-sensor fusion, user accounts or real equipment.
+- Automated unit/API tests in GitHub Actions.
 
 ## Product goals
 
@@ -56,23 +79,25 @@ See [MVP scope](docs/MVP.md) and [architecture decisions](docs/ARCHITECTURE.md).
 
 The repository is intentionally separate from Kairoseth and other products. Public material is limited to general architecture and product planning; do not commit live sensor logs, deployment credentials, installation locations or personally identifying observations.
 
-## Initial technology direction (proposal)
+## Technology direction
 
 - API: Python + FastAPI, typed schemas.
-- Web dashboard: Next.js + TypeScript.
-- Data: PostgreSQL/PostGIS for tracks, areas and event records.
+- Web dashboard: dependency-free HTML/CSS/JS for the demo; Next.js/TypeScript may follow only if justified.
+- Data: in-memory prototype; PostgreSQL/PostGIS is deferred until persistence is required.
 - Local development: Docker Compose.
 - Testing: synthetic event fixtures with deterministic trajectories.
 
-Technology choices remain proposals until validated in the first implementation issue.
+The first prototype is deliberately minimal to validate UX and event handling before adding complexity.
 
 ## Roadmap
 
-- [ ] Define synthetic observation schema and examples
-- [ ] Implement an ingestion API with validation
-- [ ] Build a working simulated track dashboard
-- [ ] Add zone rules, event review and incident history
-- [ ] Verify secure defaults, retention and CI
+- [x] Define synthetic observation schema and deterministic simulator
+- [x] Implement an authenticated-write ingestion API with validation
+- [x] Build a simulated track dashboard
+- [x] Add a hard-coded demo zone and human-reviewed, in-memory alerts
+- [ ] Validate CI and the demo end to end
+- [ ] Add durable incident history and configured retention
+- [ ] Evaluate multi-sensor integrations after safety and legal review
 
 ## License and ownership
 

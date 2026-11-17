@@ -1,0 +1,8 @@
+services:
+  aervigia-demo:
+    build: .
+    environment:
+      AERVIGIA_API_TOKEN: ${AERVIGIA_API_TOKEN:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
