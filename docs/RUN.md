@@ -6,13 +6,13 @@
 
 Requisitos: Python 3.12+.
 
-\`\`\`bash
+```bash
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
 uvicorn aervigia.app:app --host 127.0.0.1 --port 8000
-\`\`\`
+```
 
 Visita http://127.0.0.1:8000 para ver el panel; http://127.0.0.1:8000/docs para la API.
 
@@ -20,9 +20,9 @@ El simulador empieza automáticamente con dos fuentes ficticias (alpha y bravo) 
 
 ## Docker
 
-\`\`\`bash
+```bash
 docker compose up --build
-\`\`\`
+```
 
 El puerto de Docker se publica exclusivamente en 127.0.0.1 de la máquina anfitriona.
 
@@ -30,10 +30,10 @@ El puerto de Docker se publica exclusivamente en 127.0.0.1 de la máquina anfitr
 
 Por defecto las rutas POST están **deshabilitadas**. Para permitir inyección de observaciones sintéticas, reconocimiento de alertas o reinicio:
 
-\`\`\`bash
+```bash
 export AERVIGIA_API_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
 uvicorn aervigia.app:app --host 127.0.0.1 --port 8000
-\`\`\`
+```
 
 En el panel, introduce la misma clave en «Clave local de escritura» para reconocer incidentes. La interfaz no almacena ese secreto en disco. Para Docker, establece la variable antes de iniciar Compose.
 
