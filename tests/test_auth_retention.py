@@ -89,7 +89,8 @@ def test_missing_registry_fails_closed(tmp_path, monkeypatch):
     monkeypatch.setenv("AERVIGIA_USERS_FILE", str(tmp_path / "not-created.json"))
     monkeypatch.setenv("AERVIGIA_VIEW_TOKEN", "old-legacy-token")
     with TestClient(create_app(TrackStore(), background=False)) as client:
-        assert client.get("/api/state", headers={"X-View-Key": "old-legacy-token"}).status_code == 503
+        assert client.get("/api/state", headers={"X-View-Key": "old-legacy-token"}).status_code == 401
+        assert client.get("/api/state", headers=bearer("x" * 40)).status_code == 503
 
 
 def test_invalid_registry_schema_fails_closed(tmp_path, monkeypatch):
