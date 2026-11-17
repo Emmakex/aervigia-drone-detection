@@ -58,6 +58,11 @@
     .incident-filter{border:1px solid #365774;background:#122a3c;color:#c7dfef;min-height:38px;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12px}
     .incident-filter[aria-pressed="true"]{background:#286487;border-color:#76d5f3;color:#fff;font-weight:700}
     .incident-reference{font-weight:700;color:#b4e5fa;letter-spacing:.03em}
+    .report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #253e55}
+    .report-tools button,.incident-report{background:#163c51;border:1px solid #52839c;border-radius:7px;color:#d3ecf9;min-height:38px;padding:8px 11px;font-size:12px;cursor:pointer}
+    .report-tools button:hover,.incident-report:hover{background:#23536e}
+    .report-tools button:disabled,.incident-report:disabled{opacity:.6;cursor:progress}
+    .report-tools .muted{line-height:1.4}
     .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
@@ -139,6 +144,11 @@
             <button type="button" class="incident-filter" data-filter="closed" aria-pressed="false">Cerrados</button>
             <button type="button" class="incident-filter" data-filter="all" aria-pressed="false">Todos</button>
           </div>
+          <div id="report-tools" class="report-tools" hidden>
+            <button type="button" data-export="json">Exportar JSON</button>
+            <button type="button" data-export="csv">Exportar CSV</button>
+            <span class="muted">Máx. 80 incidentes recientes · solo simulación</span>
+          </div>
           <div id="alerts" class="alerts"><p class="hint">Esperando datos simulados…</p></div>
         </section>
         <section class="panel" aria-labelledby="settings-title">
@@ -171,7 +181,7 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.3.0 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.4.0 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
@@ -194,6 +204,7 @@
   function clearOperationalData() {
     alertFingerprint = null;
     currentIncidents = [];
+    $("report-tools").hidden = true;
     ["trackcount", "alertcount", "sourcecount", "stepcount"].forEach(id => $(id).textContent = "—");
     $("map").replaceChildren();
     $("trackrows").replaceChildren();
@@ -305,6 +316,55 @@
       if(button && button.isConnected) button.disabled = false;
     }
   }
+  function reportAccessHeaders(needsOperator) {
+    const headers = {};
+    if(access.mode === "named") {
+      const token = $("usertoken").value.trim();
+      if(!token) throw new Error("Introduce una credencial personal.");
+      if(needsOperator && !["operator","admin"].includes(access.role)) {
+        throw new Error("La exportación masiva requiere un operador.");
+      }
+      headers.Authorization = "Bearer " + token;
+    } else {
+      const key = needsOperator ? $("apikey").value.trim()
+        : ($("viewkey").value.trim() || $("apikey").value.trim());
+      if(!key) throw new Error("Introduce la clave de acceso.");
+      headers[needsOperator ? "X-API-Key" : ($("viewkey").value.trim() ? "X-View-Key" : "X-API-Key")] = key;
+    }
+    return headers;
+  }
+  async function downloadReport(url, name, needsOperator, button) {
+    const epoch = authEpoch;
+    try {
+      const headers = reportAccessHeaders(needsOperator);
+      if(button) button.disabled = true;
+      const response = await fetch(url, {headers, cache: "no-store"});
+      if(epoch !== authEpoch) return;
+      if(!response.ok) {
+        if(response.status === 401) {
+          clearOperationalData();
+          throw new Error("Credencial caducada o revocada.");
+        }
+        if(response.status === 403) throw new Error("No tienes permiso para exportar.");
+        throw new Error("HTTP " + response.status);
+      }
+      const blob = await response.blob();
+      if(epoch !== authEpoch) return;
+      const link = document.createElement("a");
+      const objectUrl = URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.download = name;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      feedback("Informe simulado preparado: " + name);
+    } catch(error) {
+      feedback("No se pudo descargar: " + String(error.message || error), true);
+    } finally {
+      if(button && button.isConnected) button.disabled = false;
+    }
+  }
   function renderAlerts(alerts) {
     const shown = alerts.filter(alert => {
       const status = alert.status || (alert.acknowledged ? "acknowledged" : "pending");
@@ -374,6 +434,14 @@
         section.append(btn);
         if(focusedId === alert.id) restore = btn;
       }
+      const reportButton = node("button", "Informe JSON", "incident-report");
+      reportButton.type = "button";
+      reportButton.setAttribute("aria-label", "Descargar informe simulado " + ref);
+      reportButton.addEventListener("click", () => downloadReport(
+        "/api/reports/incidents/" + encodeURIComponent(ref),
+        "aervigia-" + ref + ".json", false, reportButton
+      ));
+      section.append(reportButton);
       if(focusedId === alert.id && !restore) restore = section;
       region.append(section);
     });
@@ -454,7 +522,11 @@
       } else {
         if(viewerKey) viewHeaders["X-View-Key"] = viewerKey;
         if(operatorKey) viewHeaders["X-API-Key"] = operatorKey;
+        access.role = operatorKey ? "admin" : "viewer";
       }
+      $("report-tools").hidden = access.mode === "named"
+        ? !["operator", "admin"].includes(access.role)
+        : !$("apikey").value.trim();
       const response = await fetch("/api/state",{cache:"no-store",headers:viewHeaders});
       if(epoch !== authEpoch) return;
       if(!response.ok) throw new Error(response.status===401?"Introduce una clave de consulta válida":"HTTP "+response.status);
@@ -494,6 +566,17 @@
     setText("connection", "Verificando credencial…");
     refresh();
   }
+  document.querySelectorAll("#report-tools [data-export]").forEach(button => {
+    button.addEventListener("click", () => {
+      const format = button.dataset.export;
+      const status = encodeURIComponent(incidentFilter);
+      downloadReport(
+        "/api/reports/incidents/export?format=" + format + "&status=" + status,
+        "aervigia-incidentes-simulados-" + incidentFilter + "." + format,
+        true, button
+      );
+    });
+  });
   document.querySelectorAll(".incident-filter").forEach(button => {
     button.addEventListener("click", () => {
       incidentFilter = button.dataset.filter;
