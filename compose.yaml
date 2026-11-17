@@ -3,6 +3,15 @@ services:
     build: .
     environment:
       AERVIGIA_API_TOKEN: ${AERVIGIA_API_TOKEN:-}
+      AERVIGIA_VIEW_TOKEN: ${AERVIGIA_VIEW_TOKEN:-}
+      AERVIGIA_OPERATOR_ID: ${AERVIGIA_OPERATOR_ID:-local-operator}
+      AERVIGIA_DB_PATH: /app/data/aervigia.sqlite3
+      AERVIGIA_RETENTION_DAYS: ${AERVIGIA_RETENTION_DAYS:-7}
+    volumes:
+      - aervigia-data:/app/data
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
+
+volumes:
+  aervigia-data:
