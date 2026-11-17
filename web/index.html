@@ -165,6 +165,7 @@
   const $ = id => document.getElementById(id);
   const NS = "http://www.w3.org/2000/svg";
   const access = { mode: "legacy", role: "viewer", user: null };
+  let alertFingerprint = null;
   function setText(id, message) {
     const element = $(id);
     if(element.textContent !== message) element.textContent = message;
@@ -175,6 +176,7 @@
     element.classList.toggle("error", isError);
   }
   function clearOperationalData() {
+    alertFingerprint = null;
     ["trackcount", "alertcount", "sourcecount", "stepcount"].forEach(id => $(id).textContent = "—");
     $("map").replaceChildren();
     $("trackrows").replaceChildren();
@@ -282,6 +284,13 @@
     }
   }
   function renderAlerts(alerts) {
+    // Avoid rebuilding focusable buttons when only the map positions change.
+    const fingerprint = JSON.stringify([
+      access.mode, access.role,
+      alerts.map(a => [a.id, a.acknowledged, a.acknowledged_by || ""])
+    ]);
+    if(alertFingerprint === fingerprint) return;
+    alertFingerprint = fingerprint;
     const region = $("alerts");
     const focused = document.activeElement;
     const focusedId = focused && focused.dataset && focused.dataset.alertId;
