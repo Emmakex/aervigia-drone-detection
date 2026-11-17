@@ -10,10 +10,10 @@
     *{box-sizing:border-box}
     body{margin:0;background:radial-gradient(circle at 60% -30%,#174266 0,transparent 45%),#091321;min-height:100vh}
     button,input{font:inherit}
-    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 30px;border-bottom:1px solid #28405a;background:#091524d9}
-    .brand{font-size:23px;letter-spacing:.24em;font-weight:850}
-    .tagline{display:block;font-size:11px;letter-spacing:.15em;font-weight:500;color:#90a9c5;margin-top:4px}
-    .flag{border:1px solid #2c6e92;border-radius:999px;color:#aee8ff;background:#123048;padding:7px 12px;font-size:11px;letter-spacing:.08em;font-weight:800}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 30px;border-bottom:1px solid #28405a;background:#091524d9;flex-wrap:wrap}
+    .brand{font-size:23px;letter-spacing:.18em;font-weight:850;min-width:0;overflow-wrap:anywhere}
+    .tagline{display:block;font-size:11px;letter-spacing:.1em;font-weight:500;color:#a8c1d9;margin-top:4px;overflow-wrap:anywhere}
+    .flag{border:1px solid #2c6e92;border-radius:999px;color:#aee8ff;background:#123048;padding:7px 12px;font-size:11px;letter-spacing:.04em;font-weight:800;max-width:100%}
     .container{max-width:1540px;margin:auto;padding:26px 28px}
     .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:20px}
     h1{font-size:clamp(22px,3vw,32px);font-weight:740;margin:0}
@@ -28,7 +28,7 @@
     .stat .label{color:#9db3c9;font-size:12px}
     .layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,.9fr);gap:15px}
     .panel{overflow:hidden}
-    .heading{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #253e55;gap:10px}
+    .heading{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #253e55;gap:10px;flex-wrap:wrap}
     h2{font-size:14px;letter-spacing:.02em;margin:0;font-weight:720}
     .muted{color:#9ab1c7;font-size:12px}
     .mapwrap{background:#091c2e;padding:12px 15px 4px;position:relative}
@@ -38,7 +38,7 @@
     .dot{width:10px;height:10px;display:inline-block;margin-right:6px;border-radius:50%;background:#4be8d0}
     .dot.zone{background:#f1bf71;border-radius:2px}
     .dot.trail{background:#65aeea}
-    .right{display:flex;flex-direction:column;gap:15px}
+    .right{display:flex;flex-direction:column;gap:15px;min-width:0}
     .alerts{max-height:390px;overflow:auto;padding:8px 16px 15px}
     .alert{padding:12px 4px;border-bottom:1px solid #233950}
     .alert:last-child{border-bottom:0}
@@ -47,8 +47,9 @@
     .alert-meta{font-size:12px;color:#a4b9cb;line-height:1.6;margin-top:5px}
     .chip{border:1px solid #b18f4f;background:#4a381e;color:#f4ce8b;border-radius:6px;padding:3px 6px;font-size:10px;font-weight:800}
     .chip.ok{border-color:#417f72;background:#16362f;color:#88e6c8}
-    .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:7px 10px;cursor:pointer;font-size:11px}
+    .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
     .ack:hover{background:#225375}
+    .ack:disabled{opacity:.6;cursor:progress}
     .tablewrap{overflow-x:auto}
     table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
     th{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#8fa9c3;background:#10273b}
@@ -58,27 +59,37 @@
     .strong{font-weight:750;color:#e7f6ff}
     .settings{padding:15px 16px}
     .settings label{display:block;font-size:12px;color:#a9c0d4;margin-bottom:7px}
-    .settings input{width:100%;padding:11px;border-radius:7px;border:1px solid #34516a;background:#0b1b2b;color:#fff}
+    .settings input{width:100%;padding:12px;min-height:44px;border-radius:7px;border:1px solid #52708d;background:#0b1b2b;color:#fff}
     .settings small{display:block;color:#8fa9bf;margin-top:8px;line-height:1.5}
     .hint{margin:0;padding:18px;color:#a6bed0;font-size:13px}
+    .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .skip-link{position:absolute;left:10px;top:8px;z-index:50;background:#e4f9ff;color:#091321;padding:12px;border-radius:8px;transform:translateY(-180%)}
+    .skip-link:focus{transform:translateY(0)}
+    .feedback{font-size:13px;color:#b1efdd;min-height:22px;margin:10px 0}
+    .feedback.error{color:#ffb5a4}
+    .alert:focus{outline:2px solid #71d9fa;outline-offset:-2px;border-radius:6px}
+    [hidden]{display:none!important}
     footer{margin:25px 0 6px;font-size:12px;color:#819eb7;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
     a{color:#9edcf8}
     :focus-visible{outline:3px solid #56c9ed;outline-offset:3px}
     @media(max-width:1000px){.layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:1fr 1fr}.right .panel:first-child{grid-row:span 2}}
-    @media(max-width:670px){.header{padding:17px}.container{padding:16px}.brand{font-size:18px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.right{grid-template-columns:1fr}.stat{padding:15px}.mapwrap{padding:8px}.watermark{bottom:14px;left:20px}}
+    @media(max-width:670px){.header{padding:17px;gap:12px}.container{padding:16px}.brand{font-size:18px;letter-spacing:.12em;flex:1 1 100%}.tagline{font-size:10px;line-height:1.5}.flag{flex:0 0 auto}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.right{grid-template-columns:1fr}.stat{padding:15px}.mapwrap{padding:8px}.watermark{bottom:14px;left:20px}}
+    @media(max-width:360px){.container{padding:12px}.header{padding:14px}.heading{padding:13px}.stat .num{font-size:22px}.stat{padding:12px}.flag{font-size:10px}.watermark{font-size:10px}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
   </style>
 </head>
 <body>
+  <a href="#content" class="skip-link">Saltar al contenido principal</a>
   <header class="header">
     <div class="brand">AERVIGIA <span class="tagline">DRONE DETECTION & AIRSPACE INTELLIGENCE</span></div>
     <span class="flag">● SIMULATION ONLY</span>
   </header>
-  <main class="container">
+  <main class="container" id="content" tabindex="-1">
     <div class="topline">
       <div><h1>Centro de monitorización aérea</h1><p class="sub">Demo con dos aeronaves ficticias, observaciones generadas y revisión humana de alertas.</p></div>
-      <div class="status" role="status"><span class="pulse"></span><span id="connection">Conectando al simulador…</span></div>
+      <div class="status" role="status" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="connection">Conectando al simulador…</span></div>
     </div>
+    <p id="operation-feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"></p>
     <section class="stats" aria-label="Indicadores">
       <div class="stat"><span class="num" id="trackcount">—</span><span class="label">Trayectorias simuladas</span></div>
       <div class="stat"><span class="num" id="alertcount">—</span><span class="label">Alertas pendientes</span></div>
@@ -90,7 +101,7 @@
         <section class="panel" aria-labelledby="map-title">
           <div class="heading"><h2 id="map-title">Plano de situación sintético</h2><span class="muted">Marco ficticio · No es cartografía real</span></div>
           <div class="mapwrap">
-            <svg id="map" role="img" aria-label="Plano de simulación con zona protegida y trayectorias" viewBox="0 0 900 560"></svg>
+            <svg id="map" role="img" aria-label="Plano sintético de simulación. Los mismos datos se muestran en la tabla de trayectorias" viewBox="0 0 900 560"></svg>
             <div class="watermark" aria-hidden="true">AERVIGIA / DEMO</div>
           </div>
           <div class="legend">
@@ -101,8 +112,9 @@
         </section>
         <section class="panel" style="margin-top:15px" aria-labelledby="track-title">
           <div class="heading"><h2 id="track-title">Trayectorias activas</h2><span class="muted">Identificación provisional por fuente</span></div>
-          <div class="tablewrap"><table>
-            <thead><tr><th>ID</th><th>Clasificación</th><th>Fuente</th><th>Incertidumbre</th><th>Última observación</th></tr></thead>
+          <div class="tablewrap" role="region" aria-label="Tabla de trayectorias con desplazamiento horizontal" tabindex="0"><table>
+            <caption class="sr-only">Datos alternativos al plano: trayectorias sintéticas y sus fuentes</caption>
+            <thead><tr><th scope="col">ID</th><th scope="col">Clasificación</th><th scope="col">Fuente</th><th scope="col">Incertidumbre</th><th scope="col">Última observación</th></tr></thead>
             <tbody id="trackrows"><tr><td colspan="5">Inicializando…</td></tr></tbody>
           </table></div>
         </section>
@@ -110,7 +122,7 @@
       <aside class="right" aria-label="Alertas y configuración">
         <section class="panel" aria-labelledby="alert-title">
           <div class="heading"><h2 id="alert-title">Revisión de incidentes</h2><span class="muted" id="alerts-label">0 eventos</span></div>
-          <div id="alerts" class="alerts" aria-live="polite"><p class="hint">Esperando datos simulados…</p></div>
+          <div id="alerts" class="alerts"><p class="hint">Esperando datos simulados…</p></div>
         </section>
         <section class="panel" aria-labelledby="settings-title">
           <div class="heading"><h2 id="settings-title">Control de acceso para acciones</h2></div>
@@ -122,10 +134,10 @@
               <p id="authidentity" class="muted" role="status">Sin identificar</p>
             </div>
             <div id="legacy-auth">
-            <label for="viewkey">Clave de consulta (si se ha configurado)</label>
+              <label for="viewkey">Clave de consulta (si se ha configurado)</label>
             <input id="viewkey" type="password" autocomplete="off" placeholder="AERVIGIA_VIEW_TOKEN">
             <small>Rol de consulta: visualización de trayectorias e historial, sin modificaciones.</small>
-            <label for="apikey" style="margin-top:15px">Clave de operador (opcional)</label>
+              <label for="apikey" style="margin-top:15px">Clave de operador (opcional)</label>
             <input id="apikey" type="password" autocomplete="off" placeholder="AERVIGIA_API_TOKEN">
             <small>Modo de compatibilidad local: dos claves compartidas (sin identidad individual). Las claves se mantienen solo en memoria.</small>
             </div>
