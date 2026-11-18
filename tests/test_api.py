@@ -38,7 +38,7 @@ def test_authenticated_ingestion_and_ack(monkeypatch):
         assert len(state["tracks"]) == 1
         assert len(state["alerts"]) == 1
         aid = state["alerts"][0]["id"]
-        assert client.post(f"/api/alerts/{aid}/ack", headers=headers).status_code == 200
+        assert client.post(f"/api/alerts/{aid}/ack", headers=headers, json={"expected_reference": state["alerts"][0]["reference"]}).status_code == 200
         assert client.get("/api/state").json()["alerts"][0]["acknowledged"] is True
         assert client.post("/api/simulation/reset", headers=headers).status_code == 200
 
@@ -84,7 +84,7 @@ def test_persisted_incident_survives_application_restart(monkeypatch, tmp_path):
     with TestClient(create_app(background=False)) as client:
         assert client.post("/api/observations", json=payload(), headers=operator).status_code == 201
         alert = client.get("/api/state", headers=viewer).json()["alerts"][0]
-        assert client.post(f"/api/alerts/{alert['id']}/ack", headers=operator).status_code == 200
+        assert client.post(f"/api/alerts/{alert['id']}/ack", headers=operator, json={"expected_reference": alert["reference"]}).status_code == 200
 
     with TestClient(create_app(background=False)) as client:
         data = client.get("/api/state", headers=viewer).json()
