@@ -137,3 +137,55 @@ def test_authenticated_close_endpoint_rejects_unreviewed_and_viewers(tmp_path, m
         restored = client.get("/api/state", headers=viewer_headers).json()["alerts"][0]
         assert restored["status"] == "closed"
         assert restored["closed_by"] == "operatorBeta"
+
+
+def test_stale_incident_action_cannot_modify_new_run(tmp_path, monkeypatch):
+    """A repeated alert ID must never review/close a different incident."""
+    users = tmp_path / "users.json"
+    registry = UserRegistry(str(users))
+    token = registry.add("caseOperator", "operator")
+    admin = registry.add("caseAdmin", "admin")
+    monkeypatch.setenv("AERVIGIA_USERS_FILE", str(users))
+    monkeypatch.setenv("AERVIGIA_DB_PATH", str(tmp_path / "events.sqlite3"))
+    operator_headers = {"Authorization": f"Bearer {token}"}
+    admin_headers = {"Authorization": f"Bearer {admin}"}
+    with TestClient(create_app(background=False)) as client:
+        assert client.post(
+            "/api/observations",
+            headers=operator_headers,
+            json=event("old-observation").model_dump(mode="json"),
+        ).status_code == 201
+        old = client.get("/api/state", headers=operator_headers).json()["alerts"][0]
+
+        assert client.post("/api/simulation/reset", headers=admin_headers).status_code == 200
+        assert client.post(
+            "/api/observations",
+            headers=operator_headers,
+            json=event("new-observation").model_dump(mode="json"),
+        ).status_code == 201
+        current = client.get("/api/state", headers=operator_headers).json()["alerts"][0]
+        assert current["id"] == old["id"]  # Reused sequential ID.
+        assert current["reference"] != old["reference"]  # Distinct immutable identity.
+
+        ack_url = f"/api/alerts/{old['id']}/ack"
+        close_url = f"/api/incidents/{old['id']}/close"
+        stale = {"expected_reference": old["reference"]}
+        fresh = {"expected_reference": current["reference"]}
+
+        assert client.post(ack_url, headers=operator_headers).status_code == 422
+        assert client.post(ack_url, headers=operator_headers, json={"expected_reference": "BAD"}).status_code == 422
+        assert client.post(ack_url, headers=operator_headers, json=stale).status_code == 409
+        assert client.post(close_url, headers=operator_headers, json=stale).status_code == 409
+        unchanged = client.get("/api/state", headers=operator_headers).json()["alerts"][0]
+        assert unchanged["status"] == "pending"
+
+        assert client.post(ack_url, headers=operator_headers, json=fresh).status_code == 200
+        assert client.post(close_url, headers=operator_headers, json=stale).status_code == 409
+        assert client.post(close_url, headers=operator_headers, json=fresh).status_code == 200
+        closed = client.get("/api/state", headers=operator_headers).json()["alerts"][0]
+        assert closed["status"] == "closed"
+        assert closed["reference"] == current["reference"]
+
+        actions = client.get("/api/audit", headers=operator_headers).json()["actions"]
+        assert [action["action"] for action in actions[:3]] == ["close", "ack", "reset"]
+        assert len(actions) == 3  # Stale attempts never journal an operator action.
