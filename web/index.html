@@ -348,6 +348,7 @@
     else headers["X-API-Key"] = token;
     headers["Content-Type"] = "application/json";
     if(button) button.disabled = true;
+    let staleIncident = false;
     const endpoint = action === "close"
       ? "/api/incidents/" + encodeURIComponent(id) + "/close"
       : "/api/alerts/" + encodeURIComponent(id) + "/ack";
@@ -357,6 +358,7 @@
         body: JSON.stringify({expected_reference: reference})
       });
       if(!response.ok) {
+        staleIncident = response.status === 409;
         const data = await response.json();
         throw new Error(data.detail || "No se pudo actualizar el incidente");
       }
@@ -366,6 +368,7 @@
       await refresh();
     } catch(error) {
       feedback("No se pudo actualizar el incidente: " + String(error.message || error), true);
+      if(staleIncident) await refresh();
     } finally {
       if(button && button.isConnected) button.disabled = false;
     }
