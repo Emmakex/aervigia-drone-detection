@@ -4,7 +4,7 @@
 
 AERVIGIA is an independent, hardware-agnostic software platform for **passive drone awareness, low-altitude airspace monitoring and incident management**. Its first release focuses on combining observations from authorized sources into a clear operational picture for human operators.
 
-> **Status:** v0.5.1 local beta prototype; simulation only, no live drone detection. Simulated observations only; there is no live drone detection.
+> **Status:** v0.5.2 local beta prototype. Observations are simulated; no live drone detection.
 
 ## Quick start (local demo)
 
@@ -23,7 +23,7 @@ provides a local persistent SQLite journal with hourly retention sweeps.
 See [local run guide](docs/RUN.md) for account provisioning and revocation.
 **Do not expose this demo to the public Internet.**
 
-## Current implementation (v0.5.1)
+## Current implementation (v0.5.2)
 
 - Python/FastAPI and Pydantic-validated synthetic observation API.
 - Self-contained responsive HTML/CSS/JavaScript dashboard with synthetic tracks.
@@ -32,6 +32,7 @@ See [local run guide](docs/RUN.md) for account provisioning and revocation.
 - Individual JSON reports and operator-restricted bulk JSON/CSV exports for the **latest 80 incidents** in the current simulation.
 - Three selectable, deterministic synthetic scenarios with admin-controlled start, pause and resume. Scenario selection is journaled; pause is local/ephemeral.
 - Safe scenario switching in the dashboard: explicit confirmation and atomic protection against stale runs from other admin sessions.
+- Incident review/close requests require the immutable `INC-...` reference, preventing stale tabs from affecting a newer incident with a reused local alert ID.
 - Only reviewed incidents may be closed; authorized operator identities are recorded.
 - Optional persistent SQLite event journal with replay and startup retention (1–30 days).
 - Optional named viewer/operator/admin accounts with revocable personal bearer tokens and per-user audit attribution.

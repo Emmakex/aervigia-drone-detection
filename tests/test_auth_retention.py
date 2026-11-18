@@ -70,8 +70,9 @@ def test_named_account_permissions_and_audited_actor(tmp_path, monkeypatch):
         assert client.get("/api/state", headers=bearer(viewer)).status_code == 200
         assert client.post("/api/observations", headers=bearer(viewer), json=sample()).status_code == 403
         assert client.post("/api/observations", headers=bearer(operator), json=sample()).status_code == 201
-        alert_id = client.get("/api/state", headers=bearer(viewer)).json()["alerts"][0]["id"]
-        assert client.post(f"/api/alerts/{alert_id}/ack", headers=bearer(operator)).status_code == 200
+        alert = client.get("/api/state", headers=bearer(viewer)).json()["alerts"][0]
+        alert_id = alert["id"]
+        assert client.post(f"/api/alerts/{alert_id}/ack", headers=bearer(operator), json={"expected_reference": alert["reference"]}).status_code == 200
         assert client.post("/api/simulation/reset", headers=bearer(operator)).status_code == 403
         audited = client.get("/api/audit", headers=bearer(viewer)).json()
         assert audited["actions"][0]["details"]["actor"] == "operatorOne"

@@ -336,7 +336,7 @@
       tbody.append(tr);
     }
   }
-  async function transitionIncident(id, action, button) {
+  async function transitionIncident(id, reference, action, button) {
     const headers = {};
     const token = access.mode === "named"
       ? $("usertoken").value.trim() : $("apikey").value.trim();
@@ -346,15 +346,19 @@
     }
     if(access.mode === "named") headers.Authorization = "Bearer " + token;
     else headers["X-API-Key"] = token;
+    headers["Content-Type"] = "application/json";
     if(button) button.disabled = true;
+    let staleIncident = false;
     const endpoint = action === "close"
       ? "/api/incidents/" + encodeURIComponent(id) + "/close"
       : "/api/alerts/" + encodeURIComponent(id) + "/ack";
     try {
       const response = await fetch(endpoint, {
-        method: "POST", headers, cache: "no-store"
+        method: "POST", headers, cache: "no-store",
+        body: JSON.stringify({expected_reference: reference})
       });
       if(!response.ok) {
+        staleIncident = response.status === 409;
         const data = await response.json();
         throw new Error(data.detail || "No se pudo actualizar el incidente");
       }
@@ -364,6 +368,7 @@
       await refresh();
     } catch(error) {
       feedback("No se pudo actualizar el incidente: " + String(error.message || error), true);
+      if(staleIncident) await refresh();
     } finally {
       if(button && button.isConnected) button.disabled = false;
     }
@@ -474,7 +479,7 @@
         btn.type = "button";
         btn.dataset.alertId = alert.id;
         btn.setAttribute("aria-label", "Revisar incidente " + ref);
-        btn.addEventListener("click", () => transitionIncident(alert.id, "ack", btn));
+        btn.addEventListener("click", () => transitionIncident(alert.id, ref, "ack", btn));
         section.append(btn);
         if(focusedId === alert.id) restore = btn;
       } else if(status === "acknowledged" && canWrite) {
@@ -482,7 +487,7 @@
         btn.type = "button";
         btn.dataset.alertId = alert.id;
         btn.setAttribute("aria-label", "Cerrar incidente revisado " + ref);
-        btn.addEventListener("click", () => transitionIncident(alert.id, "close", btn));
+        btn.addEventListener("click", () => transitionIncident(alert.id, ref, "close", btn));
         section.append(btn);
         if(focusedId === alert.id) restore = btn;
       }

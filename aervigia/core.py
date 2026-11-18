@@ -233,9 +233,27 @@ class TrackStore:
                     return True
         return False
 
+    def acknowledge_incident(
+        self, alert_id: str, expected_reference: str,
+        actor: str = "local-operator",
+    ) -> str:
+        """Reject a stale UI action before writing to the synthetic audit log."""
+        with self._lock:
+            for alert in self._alerts:
+                if alert["id"] != alert_id:
+                    continue
+                if alert["reference"] != expected_reference:
+                    return "stale"
+                if alert["acknowledged"]:
+                    return "already_acknowledged"
+                self.acknowledge(alert_id, actor=actor)
+                return "acknowledged"
+            return "not_found"
+
     def close_incident(
         self, alert_id: str, actor: str = "local-operator",
         at: str | None = None, replay: bool = False,
+        expected_reference: str | None = None,
     ) -> str:
         """Archive a reviewed simulated incident without deleting the evidence.
 
@@ -245,6 +263,8 @@ class TrackStore:
             for alert in self._alerts:
                 if alert["id"] != alert_id:
                     continue
+                if expected_reference is not None and alert["reference"] != expected_reference:
+                    return "stale"
                 if alert["closed"]:
                     return "already_closed"
                 if not alert["acknowledged"]:

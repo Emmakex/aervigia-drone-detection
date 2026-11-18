@@ -113,8 +113,8 @@ def test_named_roles_gate_bulk_exports_but_viewers_can_see_one_report(tmp_path, 
         assert client.get(base + "/missing", headers=vh).status_code == 404
 
         # Closing a reviewed incident is included in CSV and JSON.
-        assert client.post(f"/api/alerts/{alert['id']}/ack", headers=oh).status_code == 200
-        assert client.post(f"/api/incidents/{alert['id']}/close", headers=oh).status_code == 200
+        assert client.post(f"/api/alerts/{alert['id']}/ack", headers=oh, json={"expected_reference": alert["reference"]}).status_code == 200
+        assert client.post(f"/api/incidents/{alert['id']}/close", headers=oh, json={"expected_reference": alert["reference"]}).status_code == 200
         json_report = client.get(base + "/export?format=json&status=closed", headers=oh)
         assert json_report.status_code == 200
         assert json_report.json()["exported_count"] == 1
