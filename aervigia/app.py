@@ -25,6 +25,10 @@ class ScenarioStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_run_id: str = Field(min_length=12, max_length=12, pattern=r"^[0-9a-f]{12}$")
 
+class IncidentActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_reference: str = Field(pattern=r"^INC-[A-F0-9]{12}$", min_length=16, max_length=16)
+
 
 def create_app(engine: TrackStore | None = None, background: bool = True) -> FastAPI:
     db_path = os.environ.get("AERVIGIA_DB_PATH", "").strip()
@@ -236,27 +240,50 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
     @application.post("/api/alerts/{alert_id}/ack")
     async def acknowledge_alert(
         alert_id: str,
+        request: IncidentActionRequest,
         x_api_key: str | None = Header(default=None),
         authorization: str | None = Header(default=None),
     ):
         principal = authorize("operator", authorization, write_candidate=x_api_key)
-        if not store.acknowledge(alert_id, actor=principal.user_id):
+        result = store.acknowledge_incident(
+            alert_id, expected_reference=request.expected_reference,
+            actor=principal.user_id,
+        )
+        if result == "not_found":
             raise HTTPException(status_code=404, detail="Alert not found")
-        return {"id": alert_id, "acknowledged": True}
+        if result == "stale":
+            raise HTTPException(
+                status_code=409, detail="Incident changed; refresh before reviewing"
+            )
+        return {
+            "id": alert_id, "reference": request.expected_reference,
+            "acknowledged": True, "already_acknowledged": result == "already_acknowledged",
+        }
 
     @application.post("/api/incidents/{alert_id}/close")
     async def close_incident(
         alert_id: str,
+        request: IncidentActionRequest,
         x_api_key: str | None = Header(default=None),
         authorization: str | None = Header(default=None),
     ):
         principal = authorize("operator", authorization, write_candidate=x_api_key)
-        result = store.close_incident(alert_id, actor=principal.user_id)
+        result = store.close_incident(
+            alert_id, actor=principal.user_id,
+            expected_reference=request.expected_reference,
+        )
         if result == "not_found":
             raise HTTPException(status_code=404, detail="Incident not found")
+        if result == "stale":
+            raise HTTPException(
+                status_code=409, detail="Incident changed; refresh before closing"
+            )
         if result == "not_reviewed":
             raise HTTPException(status_code=409, detail="Review incident before closure")
-        return {"id": alert_id, "status": "closed", "already_closed": result == "already_closed"}
+        return {
+            "id": alert_id, "reference": request.expected_reference,
+            "status": "closed", "already_closed": result == "already_closed",
+        }
 
     @application.get("/api/simulation/scenarios")
     async def available_scenarios(
