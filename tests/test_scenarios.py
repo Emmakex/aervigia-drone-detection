@@ -122,15 +122,25 @@ def test_scenario_api_roles_and_pause_resume(tmp_path, monkeypatch):
         listing = client.get(url, headers=view)
         assert listing.status_code == 200
         assert len(listing.json()["scenarios"]) == 3
-        assert client.post(url + "/clear/start", headers=view).status_code == 403
-        assert client.post(url + "/clear/start", headers=operate).status_code == 403
+        original_run_id = store.snapshot()["run_id"]
+        body = {"expected_run_id": original_run_id}
+        assert client.post(url + "/clear/start", headers=view, json=body).status_code == 403
+        assert client.post(url + "/clear/start", headers=operate, json=body).status_code == 403
         assert client.post("/api/simulation/pause", headers=operate).status_code == 403
-        assert client.post(url + "/clear/start", headers={"X-API-Key": "legacy-bypass-must-fail"}).status_code == 401
-        assert client.post(url + "/bad-value/start", headers=manage).status_code == 404
+        assert client.post(url + "/clear/start", headers={"X-API-Key": "legacy-bypass-must-fail"}, json=body).status_code == 401
+        assert client.post(url + "/bad-value/start", headers=manage, json=body).status_code == 404
+        assert client.post(url + "/clear/start", headers=manage).status_code == 422
 
-        start = client.post(url + "/clear/start", headers=manage)
+        start = client.post(url + "/clear/start", headers=manage, json=body)
         assert start.status_code == 200
         assert start.json()["scenario_id"] == "clear"
+        assert store.snapshot()["step"] == 1
+        assert start.json()["run_id"] != original_run_id
+
+        # A second admin holding an old state cannot reset the active trial.
+        stale = client.post(url + "/dual-entry/start", headers=manage, json=body)
+        assert stale.status_code == 409
+        assert store.snapshot()["scenario_id"] == "clear"
         assert store.snapshot()["step"] == 1
 
         paused = client.post("/api/simulation/pause", headers=manage)
@@ -141,11 +151,12 @@ def test_scenario_api_roles_and_pause_resume(tmp_path, monkeypatch):
         assert store.advance() is True
         assert store.snapshot()["step"] == 2
 
-        assert client.post(url + "/dual-entry/start", headers=manage).status_code == 200
+        next_body = {"expected_run_id": store.snapshot()["run_id"]}
+        assert client.post(url + "/dual-entry/start", headers=manage, json=next_body).status_code == 200
         assert client.get("/api/state", headers=view).json()["scenario_id"] == "dual-entry"
         assert store.snapshot()["step"] == 1
         assert client.post("/api/simulation/reset", headers=manage).json()["reset"] is True
         assert store.snapshot()["scenario_id"] == "dual-entry"
 
         registry.revoke("testAdmin")
-        assert client.post(url + "/clear/start", headers=manage).status_code == 401
+        assert client.post(url + "/clear/start", headers=manage, json=body).status_code == 401
