@@ -1,4 +1,4 @@
-# AERVIGIA v0.5.1 — Laboratorio local de observaciones simuladas
+# AERVIGIA v0.5.2 — Laboratorio local de observaciones simuladas
 
 **No apto para despliegue público ni decisiones operativas.** Las trayectorias, zonas y eventos son ficticios; ningún sensor real está conectado.
 
@@ -10,7 +10,7 @@ docker compose up --build
 
 Abre http://127.0.0.1:8000. El panel es de solo lectura hasta configurar una clave de escritura; por defecto Docker solo publica el puerto en `127.0.0.1`.
 
-La demo v0.5.1 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
+La demo v0.5.2 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
 
 ## Cuentas individuales y roles — modo recomendado
 
@@ -56,7 +56,7 @@ Si se configura `AERVIGIA_USERS_FILE` pero no existe el fichero, la API **rechaz
 
 > No es un servicio de identidad listo para producción: no existen aún sesiones limitadas temporalmente, SSO, MFA, limitación de intentos, gestión centralizada de identidades ni controles de seguridad para Internet. Cada token es permanente hasta su revocación. El registro no es inmutable ni a prueba de manipulaciones.
 
-## Gestión de incidentes (v0.5.1)
+## Gestión de incidentes (v0.5.2)
 
 El panel incorpora filtros **Abiertos, Pendientes, Revisados, Cerrados y Todos**.
 El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
@@ -64,11 +64,13 @@ El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
 - Un operador identificado revisa un evento antes de poder cerrarlo. Intentar cerrar sin revisión devuelve HTTP 409.
 - Las transiciones registran quién las realizó y cuándo; un cierre duplicado es idempotente y no crea otra acción.
 - La referencia visible `INC-...` deriva del ID único de la observación simulada: es reproducible y distinta tras reiniciar una simulación.
+- **Protección contra acciones obsoletas:** las API `POST /api/alerts/{id}/ack` y `POST /api/incidents/{id}/close` requieren un cuerpo JSON `{"expected_reference":"INC-XXXXXXXXXXXX"}` con la referencia exacta devuelta en `GET /api/state`. La ausencia del campo devuelve **422**, y una referencia distinta para el ID interno devuelve **409 sin modificar el nuevo incidente ni añadir un evento al diario**. Esta comprobación es necesaria porque el ID interno `SIM-ALERT-0001` puede repetirse al reiniciar un ensayo.
+- La interfaz envía la referencia automáticamente y recarga el estado después de un conflicto. Los clientes API anteriores deben actualizarse para incluir ese campo.
 - El listado del panel **muestra como máximo los 80 incidentes recientes** por limitaciones del laboratorio. No es un archivo completo e ilimitado. El diario local mantiene los eventos dentro de su retención configurada.
 - Los incidentes cerrados desaparecen del filtro «Abiertos», pero permanecen consultables en «Cerrados» mientras sigan en la ventana reciente y de retención.
 - Las bases SQLite creadas con v0.2 se migran al abrirlas para registrar los nuevos eventos de cierre.
 
-## Escenarios ficticios (v0.5.1)
+## Escenarios ficticios (v0.5.2)
 
 El panel incluye el laboratorio de escenarios con **tres presets**:
 
@@ -95,7 +97,7 @@ La API `POST /api/simulation/scenarios/{id}/start` requiere JSON `{"expected_run
 
 La simulación sigue siendo **no operativa**: planos abstractos, trayectorias deterministas y eventos imaginarios; no es un sistema certificado para seguridad aérea.
 
-## Informes y exportación (v0.5.1)
+## Informes y exportación (v0.5.2)
 
 El centro de mando permite descargar un informe individual **JSON** por incidente
 a usuarios autorizados y exportar un lote reciente como **JSON o CSV** únicamente
