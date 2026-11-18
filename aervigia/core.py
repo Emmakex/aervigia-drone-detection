@@ -110,6 +110,29 @@ class TrackStore:
             self._seen_observations.clear()
             self._alert_seq = 0
 
+    def start_scenario(
+        self, scenario_id: str, expected_run_id: str, actor: str = "local-operator",
+    ) -> dict | None:
+        """Atomically compare-and-reset a synthetic scenario for one admin.
+
+        None indicates another administrator has already replaced the run.
+        Never journal a reset on a stale request.
+        """
+        with self._lock:
+            if scenario_id not in SCENARIOS:
+                raise ValueError("Unknown simulation scenario")
+            if expected_run_id != self._run_id:
+                return None
+            self.reset(actor=actor, scenario_id=scenario_id)
+            self.advance()
+            return {
+                "simulation": True,
+                "scenario_id": scenario_id,
+                "paused": False,
+                "step": self._step,
+                "run_id": self._run_id,
+            }
+
     def set_paused(self, paused: bool, actor: str = "local-operator") -> bool:
         """Pause/resume locally without changing persistent incident evidence."""
         with self._lock:
@@ -323,6 +346,7 @@ class TrackStore:
                 "persistence": self.journal is not None,
                 "scenario_id": self._scenario_id,
                 "scenario_name": SCENARIOS[self._scenario_id]["name"],
+                "run_id": self._run_id,
                 "paused": self._paused,
                 "notice": "DEMO ONLY — fictional positions; not an operational detector",
                 "generated_at": utc_now(),
