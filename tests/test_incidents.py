@@ -115,15 +115,18 @@ def test_authenticated_close_endpoint_rejects_unreviewed_and_viewers(tmp_path, m
         assert client.post("/api/observations", headers=operator_headers, json=sample).status_code == 201
         incident = client.get("/api/state", headers=viewer_headers).json()["alerts"][0]
         url = f"/api/incidents/{incident['id']}/close"
-        assert client.post(url, headers=viewer_headers).status_code == 403
-        response = client.post(url, headers=operator_headers)
+        precondition = {"expected_reference": incident["reference"]}
+        assert client.post(url, headers=viewer_headers, json=precondition).status_code == 403
+        assert client.post(url, headers=operator_headers).status_code == 422
+        response = client.post(url, headers=operator_headers, json=precondition)
         assert response.status_code == 409, response.text
-        assert client.post(f"/api/alerts/{incident['id']}/ack", headers=operator_headers).status_code == 200
-        assert client.post(url, headers=operator_headers).json() == {
-            "id": incident["id"], "status": "closed", "already_closed": False
+        assert client.post(f"/api/alerts/{incident['id']}/ack", headers=operator_headers, json=precondition).status_code == 200
+        assert client.post(url, headers=operator_headers, json=precondition).json() == {
+            "id": incident["id"], "reference": incident["reference"],
+            "status": "closed", "already_closed": False
         }
-        assert client.post(url, headers=operator_headers).json()["already_closed"] is True
-        assert client.post("/api/incidents/nonexistent/close", headers=operator_headers).status_code == 404
+        assert client.post(url, headers=operator_headers, json=precondition).json()["already_closed"] is True
+        assert client.post("/api/incidents/nonexistent/close", headers=operator_headers, json=precondition).status_code == 404
         closed = client.get("/api/state", headers=viewer_headers).json()["alerts"][0]
         assert closed["status"] == "closed"
         assert closed["reference"] == incident["reference"]
