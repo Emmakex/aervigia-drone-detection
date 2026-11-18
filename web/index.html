@@ -75,6 +75,12 @@
     .scenario-detail{padding:0 18px 16px;color:#afc3d6;font-size:12px;line-height:1.6}
     .scenario-running{color:#a1e7cb;font-size:12px}
     .scenario-paused{color:#f6d18d;font-size:12px}
+    .scenario-confirm{padding:14px 18px;border-top:1px solid #7b654b;background:#222b34}
+    .scenario-confirm p{margin:0 0 12px;line-height:1.6;font-size:13px;color:#f5dcc0}
+    .scenario-confirm-actions{display:flex;gap:9px;flex-wrap:wrap}
+    .scenario-confirm-actions button{min-height:44px;border-radius:8px;padding:9px 14px;border:1px solid #7396ac;background:#244759;color:#eef8ff;cursor:pointer}
+    .scenario-confirm-actions button:first-child{background:#6c452b;border-color:#b58a57}
+    .scenario-confirm-actions button:disabled{opacity:.6;cursor:wait}
     .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
@@ -134,6 +140,13 @@
           <button id="scenario-start" type="button">Iniciar escenario</button>
           <button id="scenario-pause" type="button">Pausar</button>
           <button id="scenario-resume" type="button" hidden>Reanudar</button>
+        </div>
+      </div>
+      <div id="scenario-confirm" class="scenario-confirm" role="group" aria-label="Confirmación de cambio de escenario" hidden>
+        <p id="scenario-confirm-text">¿Confirmas reiniciar el ensayo simulado?</p>
+        <div class="scenario-confirm-actions">
+          <button id="scenario-confirm-yes" type="button">Confirmar reinicio</button>
+          <button id="scenario-confirm-no" type="button">Cancelar</button>
         </div>
       </div>
       <div class="scenario-detail"><span id="scenario-description">Solo datos ficticios y zonas de prueba.</span>
@@ -222,6 +235,9 @@
   let currentIncidents = [];
   let knownScenarios = [];
   let scenarioBusy = false;
+  let activeRunId = null;
+  let activeScenarioId = null;
+  let scenarioConfirmation = null;
   function setText(id, message) {
     const element = $(id);
     if(element.textContent !== message) element.textContent = message;
@@ -237,6 +253,10 @@
     $("report-tools").hidden = true;
     $("scenario-panel").hidden = true;
     knownScenarios = [];
+    activeRunId = null;
+    activeScenarioId = null;
+    scenarioConfirmation = null;
+    $("scenario-confirm").hidden = true;
     ["trackcount", "alertcount", "sourcecount", "stepcount"].forEach(id => $(id).textContent = "—");
     $("map").replaceChildren();
     $("trackrows").replaceChildren();
@@ -518,6 +538,25 @@
     });
     el.append(list);
   }
+  function cancelScenarioConfirmation(restoreFocus = false) {
+    scenarioConfirmation = null;
+    $("scenario-confirm").hidden = true;
+    if(restoreFocus && !$("scenario-panel").hidden) {
+      $("scenario-start").focus({preventScroll:true});
+    }
+  }
+  function promptScenarioStart() {
+    if(scenarioBusy || access.role !== "admin" || !activeRunId) return;
+    const id = $("scenario-select").value;
+    const preset = knownScenarios.find(item => item.id === id);
+    if(!preset) return;
+    scenarioConfirmation = {id, runId:activeRunId};
+    setText("scenario-confirm-text",
+      "Iniciar «" + preset.name + "» reinicia las pistas e incidentes visibles del ensayo actual. " +
+      "Los registros históricos siguen sujetos a la retención SQLite. ¿Confirmas el reinicio?");
+    $("scenario-confirm").hidden = false;
+    $("scenario-confirm-yes").focus({preventScroll:true});
+  }
   function updateScenarioDescription() {
     const item = knownScenarios.find(x => x.id === $("scenario-select").value);
     if(item) setText("scenario-description", item.description + " Resultado previsto: " + item.expected + ".");
@@ -539,8 +578,21 @@
       select.value = state.scenario_id;
       updateScenarioDescription();
     }
+    const oldRun = activeRunId;
+    activeRunId = state.run_id;
+    activeScenarioId = state.scenario_id;
+    if(oldRun !== null && oldRun !== activeRunId) {
+      // Another session replaced the run. Never allow an open confirmation
+      // to silently act on a newer trial.
+      if(scenarioConfirmation) {
+        cancelScenarioConfirmation();
+        feedback("El ensayo cambió en otra sesión; revisa el escenario antes de reiniciar.", true);
+      }
+      $("scenario-select").value = state.scenario_id;
+    }
     $("scenario-panel").hidden = false;
     const canAdmin = access.role === "admin";
+    if(!canAdmin && scenarioConfirmation) cancelScenarioConfirmation();
     $("scenario-actions").hidden = !canAdmin;
     $("scenario-select").disabled = !canAdmin || scenarioBusy;
     const status = state.paused ? "PAUSADO" : "EN EJECUCIÓN";
@@ -570,11 +622,15 @@
     buttons.forEach(button => { button.disabled = true; });
     try {
       const headers = scenarioAdminHeaders();
-      const id = $("scenario-select").value;
+      const selection = scenarioConfirmation;
+      if(action === "start" && !selection) throw new Error("Confirma el reinicio primero.");
+      const id = action === "start" ? selection.id : $("scenario-select").value;
       const suffix = action === "start"
         ? "/scenarios/" + encodeURIComponent(id) + "/start" : "/" + action;
+      if(action === "start") headers["Content-Type"] = "application/json";
       const response = await fetch("/api/simulation" + suffix, {
-        method:"POST", headers, cache:"no-store"
+        method:"POST", headers, cache:"no-store",
+        ...(action === "start" ? {body:JSON.stringify({expected_run_id:selection.runId})} : {})
       });
       if(epoch !== authEpoch) return;
       if(!response.ok) {
@@ -588,12 +644,15 @@
         pause:"Simulación pausada; no se generan nuevas trayectorias.",
         resume:"Simulación reanudada."
       };
+      if(action === "start") cancelScenarioConfirmation();
       feedback(messages[action]);
     } catch(error) {
       if(epoch === authEpoch) feedback("No se pudo cambiar la simulación: " + String(error.message || error), true);
     } finally {
       scenarioBusy = false;
       buttons.forEach(button => { button.disabled = false; });
+      $("scenario-confirm-yes").disabled = false;
+      $("scenario-confirm-no").disabled = false;
       if(epoch === authEpoch) refresh();
     }
   }
@@ -679,8 +738,17 @@
     setText("connection", "Verificando credencial…");
     refresh();
   }
-  $("scenario-select").addEventListener("change", updateScenarioDescription);
-  $("scenario-start").addEventListener("click", () => scenarioAction("start"));
+  $("scenario-select").addEventListener("change", () => {
+    cancelScenarioConfirmation();
+    updateScenarioDescription();
+  });
+  $("scenario-start").addEventListener("click", promptScenarioStart);
+  $("scenario-confirm-yes").addEventListener("click", () => {
+    $("scenario-confirm-yes").disabled = true;
+    $("scenario-confirm-no").disabled = true;
+    scenarioAction("start");
+  });
+  $("scenario-confirm-no").addEventListener("click", () => cancelScenarioConfirmation(true));
   $("scenario-pause").addEventListener("click", () => scenarioAction("pause"));
   $("scenario-resume").addEventListener("click", () => scenarioAction("resume"));
   document.querySelectorAll("#report-tools [data-export]").forEach(button => {
