@@ -216,7 +216,15 @@ def run_test():
                 )
                 page.locator("#scenario-actions").wait_for(state="visible")
                 page.locator("#scenario-select").select_option("clear")
+                previous_scenario = http_json(base + "/api/state", token=admin)["scenario_id"]
                 page.locator("#scenario-start").click()
+                page.locator("#scenario-confirm").wait_for(state="visible")
+                assert http_json(base + "/api/state", token=admin)["scenario_id"] == previous_scenario
+                page.locator("#scenario-confirm-no").click()
+                assert page.locator("#scenario-confirm").is_hidden()
+                assert http_json(base + "/api/state", token=admin)["scenario_id"] == previous_scenario
+                page.locator("#scenario-start").click()
+                page.locator("#scenario-confirm-yes").click()
                 page.wait_for_function(
                     "document.querySelector('#scenario-state').textContent.includes('Sin entradas')"
                 )
@@ -235,6 +243,8 @@ def run_test():
 
                 page.locator("#scenario-select").select_option("dual-entry")
                 page.locator("#scenario-start").click()
+                page.locator("#scenario-confirm").wait_for(state="visible")
+                page.locator("#scenario-confirm-yes").click()
                 page.wait_for_function(
                     "document.querySelector('#scenario-state').textContent.includes('Entradas múltiples')"
                 )

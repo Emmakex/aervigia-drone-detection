@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from aervigia import __version__
 from aervigia.auth import Identity, UserRegistry
@@ -18,6 +19,11 @@ from aervigia.reports import collection_report, csv_report, incident_report
 from aervigia.scenarios import SCENARIOS, catalog
 from aervigia.storage import SQLiteEventJournal
 from typing import Literal
+
+
+class ScenarioStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_run_id: str = Field(min_length=12, max_length=12, pattern=r"^[0-9a-f]{12}$")
 
 
 def create_app(engine: TrackStore | None = None, background: bool = True) -> FastAPI:
@@ -264,20 +270,23 @@ def create_app(engine: TrackStore | None = None, background: bool = True) -> Fas
     @application.post("/api/simulation/scenarios/{scenario_id}/start")
     async def start_scenario(
         scenario_id: str,
+        request: ScenarioStartRequest,
         authorization: str | None = Header(default=None),
         x_api_key: str | None = Header(default=None),
     ):
         principal = authorize("admin", authorization, write_candidate=x_api_key)
         if scenario_id not in SCENARIOS:
             raise HTTPException(status_code=404, detail="Unknown synthetic scenario")
-        store.reset(actor=principal.user_id, scenario_id=scenario_id)
-        store.advance()
-        return {
-            "simulation": True,
-            "scenario_id": scenario_id,
-            "paused": False,
-            "step": store.snapshot()["step"],
-        }
+        result = store.start_scenario(
+            scenario_id, expected_run_id=request.expected_run_id,
+            actor=principal.user_id,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Simulation changed in another session. Reload before restarting.",
+            )
+        return result
 
     @application.post("/api/simulation/pause")
     async def pause_scenario(
