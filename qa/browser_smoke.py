@@ -148,6 +148,7 @@ def run_test():
                 page.locator("#connection").get_attribute("id")
                 # Unauthenticated users cannot retain any operational data.
                 page.wait_for_function("document.querySelector('#trackcount').textContent === '—'")
+                assert page.locator(".status").get_attribute("data-state") in ("waiting", "error")
                 assert page.locator("#alerts button").count() == 0
                 page.locator("#usertoken").fill(viewer)
                 page.locator("#usertoken").dispatch_event("change")
@@ -172,6 +173,7 @@ def run_test():
                     assert_no_overflow(page, f"{width}x{height}")
                     assert_touch_targets(page, f"{width}x{height}")
                     assert_contrast(page, f"{width}x{height}")
+                    assert page.locator("#track-scroll-hint").is_visible() == (width <= 670)
                     if width in (1440, 390):
                         page.screenshot(path=str(SHOTS / f"aervigia-{width}.png"), full_page=True)
                 page.set_viewport_size({"width": 1440, "height": 900})
@@ -325,6 +327,10 @@ def run_test():
                 assert page.locator("#alerts button").count() == 0
                 assert "qa-fixture" not in page.locator("#trackrows").inner_text()
                 assert "qaOperator" not in page.locator("#audit").inner_text()
+                assert page.locator(".status").get_attribute("data-state") == "error"
+                assert page.locator(".status .pulse").evaluate(
+                    "(el) => getComputedStyle(el).backgroundColor"
+                ) == "rgb(255, 148, 125)"
                 page.screenshot(path=str(SHOTS / "aervigia-revoked.png"), full_page=True)
                 browser.close()
         finally:
