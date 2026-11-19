@@ -51,6 +51,40 @@ def assert_no_overflow(page, label):
     )
 
 
+def assert_touch_targets(page, label):
+    """Visible mobile and desktop controls have 44px minimum touch height."""
+    undersized = page.evaluate("""() => [...document.querySelectorAll('button,input,select')]
+      .filter(el => el.getClientRects().length > 0
+        && getComputedStyle(el).visibility !== 'hidden'
+        && !el.disabled)
+      .map(el => ({id:el.id || el.className || el.tagName,
+                   height:el.getBoundingClientRect().height}))
+      .filter(item => item.height < 43.5)""")
+    assert not undersized, f"Undersized controls at {label}: {undersized}"
+
+
+def assert_contrast(page, label):
+    """Check computed button text/background contrast under WCAG AA (4.5:1)."""
+    low = page.evaluate("""() => {
+      const rgb = value => {
+        const n = value.match(/[\\d.]+/g).map(Number);
+        return n.slice(0,3).map(v => v / 255);
+      };
+      const luminance = value => rgb(value).reduce((sum, value, i) =>
+        sum + [0.2126,0.7152,0.0722][i] *
+        (value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055)/1.055, 2.4)), 0);
+      return [...document.querySelectorAll('.incident-filter,.ack,.close-incident,.incident-report,.report-tools button,.scenario-actions button,.scenario-confirm-actions button')]
+        .filter(el => el.getClientRects().length > 0 && !el.disabled)
+        .map(el => {
+          const css = getComputedStyle(el);
+          const a = luminance(css.color);
+          const b = luminance(css.backgroundColor);
+          return {name:el.textContent.trim(), ratio:(Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)};
+        }).filter(x => x.ratio < 4.5);
+    }""")
+    assert not low, f"Insufficient button contrast at {label}: {low}"
+
+
 def run_test():
     with tempfile.TemporaryDirectory(prefix="aervigia-browser-") as temp:
         folder = Path(temp)
@@ -114,6 +148,7 @@ def run_test():
                 page.locator("#connection").get_attribute("id")
                 # Unauthenticated users cannot retain any operational data.
                 page.wait_for_function("document.querySelector('#trackcount').textContent === '—'")
+                assert page.locator(".status").get_attribute("data-state") in ("waiting", "error")
                 assert page.locator("#alerts button").count() == 0
                 page.locator("#usertoken").fill(viewer)
                 page.locator("#usertoken").dispatch_event("change")
@@ -136,6 +171,9 @@ def run_test():
                     page.set_viewport_size({"width": width, "height": height})
                     page.wait_for_timeout(150)
                     assert_no_overflow(page, f"{width}x{height}")
+                    assert_touch_targets(page, f"{width}x{height}")
+                    assert_contrast(page, f"{width}x{height}")
+                    assert page.locator("#track-scroll-hint").is_visible() == (width <= 670)
                     if width in (1440, 390):
                         page.screenshot(path=str(SHOTS / f"aervigia-{width}.png"), full_page=True)
                 page.set_viewport_size({"width": 1440, "height": 900})
@@ -220,6 +258,15 @@ def run_test():
                 page.locator("#scenario-start").click()
                 page.locator("#scenario-confirm").wait_for(state="visible")
                 assert http_json(base + "/api/state", token=admin)["scenario_id"] == previous_scenario
+                assert page.locator("#scenario-confirm").get_attribute("aria-describedby") == "scenario-confirm-text"
+                page.keyboard.press("Escape")
+                assert page.locator("#scenario-confirm").is_hidden()
+                assert page.evaluate(
+                    "() => document.activeElement?.id"
+                ) == "scenario-start", "Escape must restore focus to the start action"
+                page.locator("#scenario-start").click()
+                page.locator("#scenario-confirm").wait_for(state="visible")
+                assert http_json(base + "/api/state", token=admin)["scenario_id"] == previous_scenario
                 page.locator("#scenario-confirm-no").click()
                 assert page.locator("#scenario-confirm").is_hidden()
                 assert http_json(base + "/api/state", token=admin)["scenario_id"] == previous_scenario
@@ -280,6 +327,10 @@ def run_test():
                 assert page.locator("#alerts button").count() == 0
                 assert "qa-fixture" not in page.locator("#trackrows").inner_text()
                 assert "qaOperator" not in page.locator("#audit").inner_text()
+                assert page.locator(".status").get_attribute("data-state") == "error"
+                assert page.locator(".status .pulse").evaluate(
+                    "(el) => getComputedStyle(el).backgroundColor"
+                ) == "rgb(255, 148, 125)"
                 page.screenshot(path=str(SHOTS / "aervigia-revoked.png"), full_page=True)
                 browser.close()
         finally:
