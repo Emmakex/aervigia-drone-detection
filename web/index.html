@@ -48,18 +48,18 @@
     .alert-meta{font-size:12px;color:#a4b9cb;line-height:1.6;margin-top:5px}
     .chip{border:1px solid #b18f4f;background:#4a381e;color:#f4ce8b;border-radius:6px;padding:3px 6px;font-size:10px;font-weight:800}
     .chip.ok{border-color:#417f72;background:#16362f;color:#88e6c8}
-    .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
+    .ack{border:1px solid #467898;background:#183c59;color:#e2f4ff;border-radius:7px;padding:10px 12px;min-height:44px;cursor:pointer;font-size:12px;margin-top:6px}
     .ack:hover{background:#225375}
     .ack:disabled{opacity:.6;cursor:progress}
-    .close-incident{border:1px solid #537c8b;background:#1c3946;color:#d1f4f3;border-radius:7px;padding:10px 12px;min-height:40px;cursor:pointer;font-size:12px;margin-top:6px}
+    .close-incident{border:1px solid #537c8b;background:#1c3946;color:#d1f4f3;border-radius:7px;padding:10px 12px;min-height:44px;cursor:pointer;font-size:12px;margin-top:6px}
     .close-incident:hover{background:#244b5d}
     .close-incident:disabled{opacity:.6;cursor:progress}
     .incident-filters{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:11px 16px;border-bottom:1px solid #253e55}
-    .incident-filter{border:1px solid #365774;background:#122a3c;color:#c7dfef;min-height:38px;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12px}
+    .incident-filter{border:1px solid #365774;background:#122a3c;color:#c7dfef;min-height:44px;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12px}
     .incident-filter[aria-pressed="true"]{background:#286487;border-color:#76d5f3;color:#fff;font-weight:700}
     .incident-reference{font-weight:700;color:#b4e5fa;letter-spacing:.03em}
     .report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #253e55}
-    .report-tools button,.incident-report{background:#163c51;border:1px solid #52839c;border-radius:7px;color:#d3ecf9;min-height:38px;padding:8px 11px;font-size:12px;cursor:pointer}
+    .report-tools button,.incident-report{background:#163c51;border:1px solid #52839c;border-radius:7px;color:#d3ecf9;min-height:44px;padding:8px 11px;font-size:12px;cursor:pointer}
     .report-tools button:hover,.incident-report:hover{background:#23536e}
     .report-tools button:disabled,.incident-report:disabled{opacity:.6;cursor:progress}
     .report-tools .muted{line-height:1.4}
@@ -81,7 +81,7 @@
     .scenario-confirm-actions button{min-height:44px;border-radius:8px;padding:9px 14px;border:1px solid #7396ac;background:#244759;color:#eef8ff;cursor:pointer}
     .scenario-confirm-actions button:first-child{background:#6c452b;border-color:#b58a57}
     .scenario-confirm-actions button:disabled{opacity:.6;cursor:wait}
-    .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:40px;cursor:pointer}
+    .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:44px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
     table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
@@ -142,7 +142,7 @@
           <button id="scenario-resume" type="button" hidden>Reanudar</button>
         </div>
       </div>
-      <div id="scenario-confirm" class="scenario-confirm" role="group" aria-label="Confirmación de cambio de escenario" hidden>
+      <div id="scenario-confirm" class="scenario-confirm" role="group" aria-label="Confirmación de cambio de escenario" aria-describedby="scenario-confirm-text" hidden>
         <p id="scenario-confirm-text">¿Confirmas reiniciar el ensayo simulado?</p>
         <div class="scenario-confirm-actions">
           <button id="scenario-confirm-yes" type="button">Confirmar reinicio</button>
@@ -222,7 +222,7 @@
         </section>
       </aside>
     </div>
-    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.5.3 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
+    <footer><span>© 2026 Eduardo Yauri · AERVIGIA v0.5.4 · Todos los derechos reservados</span><span>Observaciones 100 % ficticias. No apto para decisiones operativas.</span></footer>
   </main>
 <script>
 (() => {
@@ -754,6 +754,12 @@
     scenarioAction("start");
   });
   $("scenario-confirm-no").addEventListener("click", () => cancelScenarioConfirmation(true));
+  $("scenario-confirm").addEventListener("keydown", event => {
+    if(event.key === "Escape" && scenarioConfirmation) {
+      event.preventDefault();
+      cancelScenarioConfirmation(true);
+    }
+  });
   $("scenario-pause").addEventListener("click", () => scenarioAction("pause"));
   $("scenario-resume").addEventListener("click", () => scenarioAction("resume"));
   document.querySelectorAll("#report-tools [data-export]").forEach(button => {
