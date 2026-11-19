@@ -111,7 +111,8 @@ The first prototype is deliberately minimal to validate UX and event handling be
 - [x] Add local viewer/operator keys and an audit endpoint for operator actions
 - [x] Validate responsive layout and keyboard alert actions with Chromium browser tests
 - [x] Check >=44px visible controls, button text contrast and Escape cancellation in real Chromium
-- [ ] Review the final visual design manually (screenshots generated in PR CI)
+- [x] Inspect Chromium screenshots on desktop/mobile and fix observed beta UX defects — see [visual beta review](docs/BETA_UX_REVIEW.md)
+- [ ] Obtain final client sign-off on the local beta design (separate from automated testing)
 - [x] Add named-account roles, revocable personal tokens and runtime retention sweeps
 - [x] Add pending/reviewed/closed incident workflow and recent-history filter
 - [x] Add simulation-only incident reports and safe bounded JSON/CSV downloads
