@@ -20,7 +20,10 @@
     p{line-height:1.55}
     .sub{margin:8px 0 0;color:#a0b7cb;font-size:14px}
     .status{font-size:12px;color:#b8d4e8;display:flex;gap:8px;align-items:center}
-    .pulse{width:9px;height:9px;border-radius:50%;background:#4cdeb0;box-shadow:0 0 0 4px #4cdeb022}
+    .pulse{width:9px;height:9px;border-radius:50%;background:#4cdeb0;box-shadow:0 0 0 4px #4cdeb022;flex-shrink:0}
+    .status[data-state="waiting"] .pulse{background:#e8bb74;box-shadow:0 0 0 4px #e8bb7422}
+    .status[data-state="error"] .pulse{background:#ff947d;box-shadow:0 0 0 4px #ff947d22}
+    .status[data-state="error"]{color:#ffb9a8}
     .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:15px}
     .stat,.panel{background:#101f30;border:1px solid #28405a;border-radius:14px;box-shadow:0 15px 45px #03090f30}
     .stat{padding:17px 20px}
@@ -84,6 +87,7 @@
     .logout{margin-top:10px;border:1px solid #52708d;background:transparent;color:#d6e9fa;border-radius:7px;padding:10px 14px;min-height:44px;cursor:pointer}
     .logout:hover{background:#193b52}
     .tablewrap{overflow-x:auto}
+    .table-scroll-hint{display:none}
     table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
     th{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#8fa9c3;background:#10273b}
     td,th{padding:12px 15px;border-bottom:1px solid #223a51}
@@ -106,7 +110,7 @@
     a{color:#9edcf8}
     :focus-visible{outline:3px solid #56c9ed;outline-offset:3px}
     @media(max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.right{display:grid;grid-template-columns:1fr 1fr}.right .panel:first-child{grid-row:span 2}}
-    @media(max-width:670px){.header{padding:17px;gap:12px}.container{padding:16px}.brand{font-size:18px;letter-spacing:.12em;flex:1 1 100%}.tagline{font-size:10px;line-height:1.5}.flag{flex:0 0 auto}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.right{grid-template-columns:1fr}.stat{padding:15px}.mapwrap{padding:8px}.watermark{bottom:14px;left:20px}}
+    @media(max-width:670px){.table-scroll-hint{display:block;color:#b1c8da;font-size:12px;margin:0;padding:9px 16px 13px}.header{padding:17px;gap:12px}.container{padding:16px}.brand{font-size:18px;letter-spacing:.12em;flex:1 1 100%}.tagline{font-size:10px;line-height:1.5}.flag{flex:0 0 auto}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.right{grid-template-columns:1fr}.stat{padding:15px}.mapwrap{padding:8px}.watermark{bottom:14px;left:20px}}
     @media(max-width:360px){.container{padding:12px}.header{padding:14px}.heading{padding:13px}.stat .num{font-size:22px}.stat{padding:12px}.flag{font-size:10px}.watermark{font-size:10px}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
   </style>
@@ -115,12 +119,12 @@
   <a href="#content" class="skip-link">Saltar al contenido principal</a>
   <header class="header">
     <div class="brand">AERVIGIA <span class="tagline">DRONE DETECTION & AIRSPACE INTELLIGENCE</span></div>
-    <span class="flag">● SIMULATION ONLY</span>
+    <span class="flag">● SOLO SIMULACIÓN</span>
   </header>
   <main class="container" id="content" tabindex="-1">
     <div class="topline">
       <div><h1>Centro de monitorización aérea</h1><p class="sub">Escenarios con dos o tres pistas ficticias, observaciones simuladas y revisión humana de incidentes.</p></div>
-      <div class="status" role="status" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="connection">Conectando al simulador…</span></div>
+      <div class="status" role="status" aria-live="polite" data-state="waiting"><span class="pulse" aria-hidden="true"></span><span id="connection">Conectando al simulador…</span></div>
     </div>
     <p id="operation-feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"></p>
     <section class="stats" aria-label="Indicadores">
@@ -168,11 +172,12 @@
         </section>
         <section class="panel" style="margin-top:15px" aria-labelledby="track-title">
           <div class="heading"><h2 id="track-title">Trayectorias activas</h2><span class="muted">Identificación provisional por fuente</span></div>
-          <div class="tablewrap" role="region" aria-label="Tabla de trayectorias con desplazamiento horizontal" tabindex="0"><table>
+          <div class="tablewrap" role="region" aria-label="Tabla de trayectorias con desplazamiento horizontal" aria-describedby="track-scroll-hint" tabindex="0"><table>
             <caption class="sr-only">Datos alternativos al plano: trayectorias sintéticas y sus fuentes</caption>
             <thead><tr><th scope="col">ID</th><th scope="col">Clasificación</th><th scope="col">Fuente</th><th scope="col">Incertidumbre</th><th scope="col">Última observación</th></tr></thead>
             <tbody id="trackrows"><tr><td colspan="5">Inicializando…</td></tr></tbody>
           </table></div>
+          <p id="track-scroll-hint" class="table-scroll-hint">Desliza horizontalmente la tabla para ver la incertidumbre y la última observación.</p>
         </section>
       </div>
       <aside class="right" aria-label="Alertas y configuración">
@@ -242,6 +247,10 @@
     const element = $(id);
     if(element.textContent !== message) element.textContent = message;
   }
+  function connectionStatus(message, state) {
+    setText("connection", message);
+    document.querySelector(".status").dataset.state = state;
+  }
   function feedback(message, isError = false) {
     const element = $("operation-feedback");
     setText("operation-feedback", message);
@@ -252,6 +261,8 @@
     currentIncidents = [];
     $("report-tools").hidden = true;
     $("scenario-panel").hidden = true;
+    setText("operation-feedback", "");
+    $("operation-feedback").classList.remove("error");
     knownScenarios = [];
     activeRunId = null;
     activeScenarioId = null;
@@ -677,7 +688,7 @@
           access.user = null;
           access.role = "viewer";
           setText("authidentity", "Sin identificar");
-          setText("connection", "Introduce tu credencial personal");
+          connectionStatus("Introduce tu credencial personal", "waiting");
           clearOperationalData();
           return;
         }
@@ -711,7 +722,7 @@
       $("alertcount").textContent = state.alerts.filter(a=>!a.acknowledged).length;
       $("sourcecount").textContent = new Set(state.tracks.map(t=>t.source_id)).size;
       $("stepcount").textContent = state.step;
-      setText("connection", "Simulación conectada · actualización 1,5 s");
+      connectionStatus("Simulación conectada · actualización 1,5 s", "ready");
       currentIncidents = state.alerts;
       await renderScenarioState(state, viewHeaders, epoch);
       if(epoch !== authEpoch) return;
@@ -724,7 +735,7 @@
       }
     } catch(error) {
       if(epoch !== authEpoch) return;
-      setText("connection", "Error de conexión: " + String(error.message || error));
+      connectionStatus("Error de conexión: " + String(error.message || error), "error");
       clearOperationalData();
       feedback("No se muestran datos hasta recuperar un acceso válido.", true);
     } finally {loading = false;}
@@ -740,7 +751,7 @@
     lastCredentialSignature = signature;
     authEpoch++;
     clearOperationalData();
-    setText("connection", "Verificando credencial…");
+    connectionStatus("Verificando credencial…", "waiting");
     refresh();
   }
   $("scenario-select").addEventListener("change", () => {
@@ -793,7 +804,7 @@
     access.user = null;
     access.role = "viewer";
     setText("authidentity", "Sin identificar");
-    setText("connection", "Sesión local cerrada");
+    connectionStatus("Sesión local cerrada", "waiting");
     clearOperationalData();
     feedback("Sesión local cerrada. No se guardan credenciales en el navegador.");
     $("usertoken").focus();
@@ -807,7 +818,7 @@
       $("named-auth").hidden = access.mode !== "named";
       $("legacy-auth").hidden = access.mode === "named";
     } catch(error) {
-      $("connection").textContent = "No se pudo comprobar el modo de acceso";
+      connectionStatus("No se pudo comprobar el modo de acceso", "error");
       return;
     }
     await refresh();
