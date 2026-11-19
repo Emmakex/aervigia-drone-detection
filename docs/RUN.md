@@ -1,4 +1,4 @@
-# AERVIGIA v0.5.2 — Laboratorio local de observaciones simuladas
+# AERVIGIA v0.5.3 — Laboratorio local de observaciones simuladas
 
 **No apto para despliegue público ni decisiones operativas.** Las trayectorias, zonas y eventos son ficticios; ningún sensor real está conectado.
 
@@ -10,7 +10,7 @@ docker compose up --build
 
 Abre http://127.0.0.1:8000. El panel es de solo lectura hasta configurar una clave de escritura; por defecto Docker solo publica el puerto en `127.0.0.1`.
 
-La demo v0.5.2 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
+La demo v0.5.3 mantiene el antiguo modo local de claves compartidas mientras no se configure `AERVIGIA_USERS_FILE`. **Para pruebas con varios operadores se recomienda el modo de cuentas individuales siguiente.**
 
 ## Cuentas individuales y roles — modo recomendado
 
@@ -56,7 +56,7 @@ Si se configura `AERVIGIA_USERS_FILE` pero no existe el fichero, la API **rechaz
 
 > No es un servicio de identidad listo para producción: no existen aún sesiones limitadas temporalmente, SSO, MFA, limitación de intentos, gestión centralizada de identidades ni controles de seguridad para Internet. Cada token es permanente hasta su revocación. El registro no es inmutable ni a prueba de manipulaciones.
 
-## Gestión de incidentes (v0.5.2)
+## Gestión de incidentes (v0.5.3)
 
 El panel incorpora filtros **Abiertos, Pendientes, Revisados, Cerrados y Todos**.
 El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
@@ -70,7 +70,7 @@ El ciclo requiere intervención humana: **pendiente → revisado → cerrado**.
 - Los incidentes cerrados desaparecen del filtro «Abiertos», pero permanecen consultables en «Cerrados» mientras sigan en la ventana reciente y de retención.
 - Las bases SQLite creadas con v0.2 se migran al abrirlas para registrar los nuevos eventos de cierre.
 
-## Escenarios ficticios (v0.5.2)
+## Escenarios ficticios (v0.5.3)
 
 El panel incluye el laboratorio de escenarios con **tres presets**:
 
@@ -80,7 +80,7 @@ El panel incluye el laboratorio de escenarios con **tres presets**:
 
 El catálogo se consulta desde el servidor, no se editan coordenadas reales ni se conecta hardware. Los botones para **Iniciar**, **Pausar** y **Reanudar** solo se habilitan a administradores autenticados. Los roles viewer y operator pueden ver el estado, pero no cambiarlo.
 
-**Iniciar un escenario reinicia el estado visible** (pistas, alertas e incidentes de la sesión actual). Con SQLite, la selección de escenario se registra como evento de reinicio con el identificador y usuario responsable. Los eventos anteriores siguen sujetos a la retención configurada, pero no se mezclan con el estado visible del nuevo ensayo. La pausa/reanudación funciona **solo en memoria**: se pierde al reiniciar el servicio y no constituye auditoría persistente.
+**Iniciar un escenario reinicia el estado visible** (pistas, alertas e incidentes de la sesión actual). Con SQLite, la selección de escenario se registra como evento de reinicio con el identificador y usuario responsable. Los eventos anteriores siguen sujetos a la retención configurada, pero no se mezclan con el estado visible del nuevo ensayo. La pausa/reanudación funciona **solo en memoria**: se pierde al reiniciar el servicio y no constituye auditoría persistente. La selección vigente del escenario, a diferencia de las acciones de pausa, se almacena también como un único metadato de SQLite: sigue disponible cuando el evento de reinicio caduca por retención. Las bases de versiones anteriores recuperan ese metadato del último evento `reset` **antes** de purgar el historial vencido. No se conserva de forma indefinida el evento de auditoría correspondiente.
 
 Rutas locales:
 
@@ -97,7 +97,7 @@ La API `POST /api/simulation/scenarios/{id}/start` requiere JSON `{"expected_run
 
 La simulación sigue siendo **no operativa**: planos abstractos, trayectorias deterministas y eventos imaginarios; no es un sistema certificado para seguridad aérea.
 
-## Informes y exportación (v0.5.2)
+## Informes y exportación (v0.5.3)
 
 El centro de mando permite descargar un informe individual **JSON** por incidente
 a usuarios autorizados y exportar un lote reciente como **JSON o CSV** únicamente
