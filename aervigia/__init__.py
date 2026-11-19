@@ -1,3 +1,3 @@
 """AERVIGIA — simulation-first drone airspace awareness prototype."""
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"

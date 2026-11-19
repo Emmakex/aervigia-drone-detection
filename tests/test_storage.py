@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 import sqlite3
 
 from aervigia.core import Observation, Position, TrackStore
@@ -99,4 +100,47 @@ def test_simulator_event_ids_do_not_collide_after_reset_or_restart(tmp_path):
     restored = TrackStore(journal=reopened)
     restored.advance()
     assert reopened.count() == 7
+    reopened.close()
+
+
+
+def test_legacy_database_backfills_scenario_before_expiring_reset(tmp_path):
+    """Upgrade a v0.5.2 journal that never had a separate scenario setting."""
+    db = str(tmp_path / "previous-version.sqlite3")
+    recent = datetime.now(timezone.utc).isoformat()
+    old = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    with sqlite3.connect(db) as conn:
+        conn.execute("""
+            CREATE TABLE journal_events (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL CHECK(kind IN ('observation','ack','reset','close')),
+                recorded_at TEXT NOT NULL,
+                event_id TEXT UNIQUE,
+                payload TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "INSERT INTO journal_events(kind,recorded_at,payload) VALUES(?,?,?)",
+            ("reset", old, json.dumps({
+                "actor": "oldAdmin", "at": old, "scenario_id": "clear",
+            })),
+        )
+        conn.execute(
+            "INSERT INTO journal_events(kind,recorded_at,event_id,payload) "
+            "VALUES(?,?,?,?)",
+            ("observation", recent, "after-old-reset",
+             json.dumps(obs("after-old-reset", lat=0.03, lon=0.03).model_dump(mode="json"))),
+        )
+
+    upgraded = SQLiteEventJournal(db, retention_days=1)
+    assert upgraded.count() == 1  # Historical reset event respects retention.
+    assert upgraded.active_scenario() == "clear"
+    store = TrackStore(journal=upgraded)
+    assert store.snapshot()["scenario_id"] == "clear"
+    assert len(store.snapshot()["tracks"]) == 1
+    upgraded.close()
+
+    # Also valid on a subsequent startup, with no remaining reset event.
+    reopened = SQLiteEventJournal(db, retention_days=1)
+    assert TrackStore(journal=reopened).snapshot()["scenario_id"] == "clear"
     reopened.close()

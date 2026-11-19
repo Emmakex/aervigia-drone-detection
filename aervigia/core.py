@@ -84,6 +84,8 @@ class TrackStore:
                     )
                 elif kind == "reset":
                     self.reset(replay=True, scenario_id=payload.get("scenario_id", DEFAULT_SCENARIO))
+            # The latest choice remains valid after older reset events expire.
+            self._scenario_id = self.journal.active_scenario()
 
     def reset(
         self, replay: bool = False, actor: str = "local-operator",
@@ -302,6 +304,7 @@ class TrackStore:
             if not removed:
                 return 0
             saved_run, saved_step, saved_paused = self._run_id, self._step, self._paused
+            saved_scenario = self._scenario_id
             self.reset(replay=True)
             for kind, payload in self.journal.iter_events():
                 if kind == "observation":
@@ -318,7 +321,9 @@ class TrackStore:
                     )
                 elif kind == "reset":
                     self.reset(replay=True, scenario_id=payload.get("scenario_id", DEFAULT_SCENARIO))
-            # Keep the running simulator's series continuous after maintenance.
+            # A reset event may have expired, but the active selection must not
+            # revert to "standard" during the simulator's ongoing run.
+            self._scenario_id = saved_scenario
             self._run_id, self._step, self._paused = saved_run, saved_step, saved_paused
             return removed
 

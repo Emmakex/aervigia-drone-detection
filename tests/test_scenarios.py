@@ -1,5 +1,8 @@
 """Regression tests for simulation-only scenario selection and controls."""
 
+from datetime import datetime, timedelta, timezone
+import sqlite3
+
 from fastapi.testclient import TestClient
 
 from aervigia.app import create_app
@@ -160,3 +163,48 @@ def test_scenario_api_roles_and_pause_resume(tmp_path, monkeypatch):
 
         registry.revoke("testAdmin")
         assert client.post(url + "/clear/start", headers=manage, json=body).status_code == 401
+
+
+
+def test_expired_reset_does_not_switch_running_scenario(tmp_path):
+    path = str(tmp_path / "ongoing.sqlite3")
+    journal = SQLiteEventJournal(path, retention_days=1)
+    store = TrackStore(journal=journal)
+    store.reset(scenario_id="dual-entry", actor="caseAdmin")
+    for _ in range(9):
+        store.advance()
+    before = store.snapshot()
+    assert before["scenario_id"] == "dual-entry"
+    assert len(before["alerts"]) >= 2
+    store.set_paused(True)
+
+    # The selection happened earlier than the retained observations;
+    # only its reset EVENT is expired, not the active scenario setting.
+    old_stamp = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "UPDATE journal_events SET recorded_at = ? WHERE kind='reset'",
+            (old_stamp,),
+        )
+
+    assert store.maintain() == 1
+    after = store.snapshot()
+    assert after["scenario_id"] == "dual-entry"
+    assert journal.active_scenario() == "dual-entry"
+    assert after["run_id"] == before["run_id"]
+    assert after["step"] == before["step"]
+    assert after["paused"] is True
+    assert {a["reference"] for a in after["alerts"]} == {
+        a["reference"] for a in before["alerts"]
+    }
+    journal.close()
+
+    reopened = SQLiteEventJournal(path, retention_days=1)
+    restored = TrackStore(journal=reopened)
+    state = restored.snapshot()
+    assert state["scenario_id"] == "dual-entry"
+    assert state["paused"] is False  # Pauses are deliberately ephemeral.
+    assert {a["reference"] for a in state["alerts"]} == {
+        a["reference"] for a in before["alerts"]
+    }
+    reopened.close()

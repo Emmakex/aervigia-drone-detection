@@ -10,6 +10,8 @@ from pathlib import Path
 import sqlite3
 from threading import RLock
 
+from aervigia.scenarios import DEFAULT_SCENARIO, SCENARIOS
+
 
 class SQLiteEventJournal:
     def __init__(self, path: str, retention_days: int = 7):
@@ -66,11 +68,48 @@ class SQLiteEventJournal:
                 "CREATE INDEX IF NOT EXISTS journal_events_recorded_at_idx "
                 "ON journal_events(recorded_at)"
             )
+            # A single durable setting survives journal event expiry. A
+            # pre-v0.5.3 database is backfilled BEFORE removing expired
+            # reset events so its last selected scenario is not forgotten.
+            self._conn.execute("""
+                CREATE TABLE IF NOT EXISTS journal_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            """)
+            current = self._conn.execute(
+                "SELECT value FROM journal_meta WHERE key='active_scenario'"
+            ).fetchone()
+            if current is None:
+                last_reset = self._conn.execute(
+                    "SELECT payload FROM journal_events WHERE kind='reset' "
+                    "ORDER BY seq DESC LIMIT 1"
+                ).fetchone()
+                scenario_id = (
+                    json.loads(last_reset[0]).get("scenario_id", DEFAULT_SCENARIO)
+                    if last_reset else DEFAULT_SCENARIO
+                )
+                if scenario_id not in SCENARIOS:
+                    raise ValueError("Unknown persisted simulation scenario")
+                self._conn.execute(
+                    "INSERT INTO journal_meta(key,value) VALUES('active_scenario',?)",
+                    (scenario_id,),
+                )
             self._conn.commit()
             self.purge_expired()
 
+    def active_scenario(self) -> str:
+        """Read the currently selected demo preset, independent of event retention."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM journal_meta WHERE key='active_scenario'"
+            ).fetchone()
+            if row is None or row[0] not in SCENARIOS:
+                raise ValueError("Invalid persisted simulation scenario")
+            return row[0]
+
     def purge_expired(self):
-        """Purge expired rows on startup; no automatic archival beyond retention."""
+        """Purge expired journal rows; active scenario metadata is unaffected."""
         cutoff = (datetime.now(timezone.utc) - timedelta(days=self.retention_days)).isoformat()
         with self._lock:
             cursor = self._conn.execute(
@@ -84,6 +123,8 @@ class SQLiteEventJournal:
             raise ValueError("Unsupported journal event")
         if kind == "observation" and not event_id:
             raise ValueError("Observation requires event_id")
+        if kind == "reset" and payload.get("scenario_id", DEFAULT_SCENARIO) not in SCENARIOS:
+            raise ValueError("Unknown simulation scenario")
         with self._lock:
             try:
                 self._conn.execute(
@@ -96,6 +137,12 @@ class SQLiteEventJournal:
                         json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
                     ),
                 )
+                if kind == "reset":
+                    # Reset event and active preset change share a transaction.
+                    self._conn.execute(
+                        "UPDATE journal_meta SET value=? WHERE key='active_scenario'",
+                        (payload.get("scenario_id", DEFAULT_SCENARIO),),
+                    )
                 self._conn.commit()
                 return True
             except sqlite3.IntegrityError:
